@@ -6,10 +6,11 @@
   "scripts": {
     "dev": "node --use-env-proxy server.mjs",
     "start": "node --use-env-proxy server.mjs",
-    "test": "node tests/calculator.test.js && node tests/parsing.test.js",
-    "check": "node --check app.js && node --check calculator.js && node --check server.mjs && node --check document-reader.mjs && node --check document-parser.js && node --check browser-reader.js && node --check scripts/build.mjs",
+    "test": "node tests/calculator.test.js && node tests/parsing.test.js && node tests/document-ai-client.test.js",
+    "check": "node --check app.js && node --check calculator.js && node --check server.mjs && node --check document-reader.mjs && node --check document-parser.js && node --check browser-reader.js && node --check scripts/build.mjs && node --check document-ai-client.js",
     "build": "node scripts/build.mjs",
-    "test:native": "node tests/documents.test.js"
+    "test:native": "node tests/documents.test.js",
+    "test:backend": "python3 -m unittest discover -s backend/tests -v"
   },
   "engines": {
     "node": ">=24.5.0"

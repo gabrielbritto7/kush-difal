@@ -1,4 +1,4 @@
-import { mkdir, rm, copyFile, cp, readdir } from 'node:fs/promises';
+import { mkdir, rm, copyFile, cp, readdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
@@ -6,7 +6,8 @@ const output=join(root,'public');
 await rm(output,{recursive:true,force:true});
 await mkdir(join(output,'vendor/core'),{recursive:true});
 await mkdir(join(output,'vendor/lang'),{recursive:true});
-for(const file of ['index.html','styles.css','app.js','calculator.js','document-parser.js','browser-reader.js']) await copyFile(join(root,file),join(output,file));
+for(const file of ['index.html','styles.css','app.js','calculator.js','document-parser.js','browser-reader.js','document-ai-client.js']) await copyFile(join(root,file),join(output,file));
+await writeFile(join(output,'app-config.json'),JSON.stringify({documentAIUrl:process.env.DOCUMENT_AI_URL || ''}));
 const modules=join(root,'node_modules');
 await cp(join(root,'assets'),join(output,'assets'),{recursive:true});
 await mkdir(join(output,'assets/fonts'),{recursive:true});

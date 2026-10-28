@@ -1,0 +1,15 @@
+services:
+  difal:
+    build: .
+    ports:
+      - "7860:7860"
+    environment:
+      ALLOWED_ORIGINS: "http://localhost:7860,http://127.0.0.1:7860,https://difal.kush-archives.com.br"
+    volumes:
+      - docling-models:/models
+    mem_limit: 8g
+    cpus: 4
+    init: true
+    restart: unless-stopped
+volumes:
+  docling-models:

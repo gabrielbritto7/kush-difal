@@ -55,3 +55,7 @@ Não cobre ICMS-ST, benefícios fiscais, reduções, base dupla, regimes especia
 As dependências são obtidas pelo npm com integridade registrada no lockfile. O build inclui os avisos de licença disponíveis em `public/vendor/licenses`.
 
 A implementação anterior com Poppler/Tesseract nativos foi preservada em `document-reader.mjs` apenas como alternativa local, sem endpoint público e sem uso pelo site publicado. Seus testes opcionais (`npm run test:native`) precisam de Poppler, Tesseract, Python/Pillow e fontes DejaVu. A página estática e os testes padrão não dependem dessas ferramentas.
+
+## Identidade visual
+
+O site segue a identidade dos projetos PDF (`ilovekush`) e Bitmap do Kush Archives: títulos Fredoka, texto Quicksand, fundo branco, contornos pretos e botões arredondados. Fontes são servidas localmente e suas licenças acompanham o build em `assets/licenses`. O favicon é o mesmo do projeto PDF do usuário. Os links do cabeçalho levam às ferramentas PDF, Bitmap e remoção de fundo.

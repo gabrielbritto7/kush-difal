@@ -2,34 +2,45 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#152f29">
+  <meta name="theme-color" content="#ffffff">
   <meta name="description" content="Importe sua NF-e ou orçamento e simule o DIFAL interestadual com clareza.">
-  <title>Kush — Calculadora DIFAL</title>
+  <title>kush4rchives | difal</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <link rel="preload" href="/assets/fonts/quicksand-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/fredoka-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <aside class="sidebar">
-    <a class="brand" href="/" aria-label="Kush início"><span class="brand-icon">k<span><svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></span></span>kush<span class="brand-dot">.</span></a>
-    <span class="workspace-label">ESPAÇO DE TRABALHO</span>
-    <a class="nav-link active" href="#calculator"><span>▦</span> Calculadora DIFAL <span class="nav-arrow"><svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></span></a>
-    <button class="nav-link" id="history-button"><span>◷</span> Histórico <span id="history-count" class="count">0</span></button>
-    <button class="nav-link" id="guide-button"><span>▤</span> Guia de cálculo</button>
-    <div class="sidebar-note"><span class="note-icon">✧</span><strong>Menos planilhas.<br>Mais clareza.</strong><p>Seu próximo cálculo começa com um arquivo.</p><button id="sidebar-import">Importar documento <span><svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></span></button></div>
-    <div class="sidebar-bottom"><span class="avatar">K</span><div><strong>Meu espaço</strong><small>Dados salvos neste navegador</small></div><span class="online-dot"></span></div>
-  </aside>
+  <a class="skip-link" href="#calculator">Pular para a calculadora</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="Kush Archives — Calculadora DIFAL">kush4rchives<span class="brand-label">DIFAL</span></a>
+      <nav class="ecosystem-nav" aria-label="Outras ferramentas Kush Archives">
+        <a href="https://pdf.kush-archives.com.br" target="_blank" rel="noopener noreferrer">PDF <svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></a>
+        <a href="https://bitmap.kush-archives.com.br" target="_blank" rel="noopener noreferrer">Bitmap <svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></a>
+        <a href="https://bg.kush-archives.com.br" target="_blank" rel="noopener noreferrer">Remover fundo <svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></a>
+      </nav>
+      <button class="header-guide" id="guide-button" aria-label="Como funciona o cálculo"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6a3 3 0 0 1 3 3v14a4 4 0 0 0-4-3H4zm9 3a3 3 0 0 1 3-3h5v14h-4a4 4 0 0 0-4 3"/></svg><span>Como funciona</span></button>
+    </div>
+  </header>
   <div class="main-shell">
-    <header class="topbar"><div>Ferramentas <span>/</span> <strong>Calculadora DIFAL</strong></div><span class="private-label"><span>◈</span> Seus arquivos ficam no seu navegador</span></header>
-    <main id="calculator">
-      <div class="page-heading"><div><div class="eyebrow"><span></span> SIMPLES DO COMEÇO AO CÁLCULO</div><h1>O DIFAL, sem complicar<span>.</span></h1><p>Importe sua nota ou orçamento. A gente cuida das contas.</p></div><button class="button secondary" id="new-button"><span>＋</span> Novo cálculo</button></div>
-      <div class="steps"><span class="step current"><b>1</b> Importe o documento</span><i></i><span class="step" id="step-review"><b>2</b> Confira os dados</span><i></i><span class="step" id="step-result"><b>3</b> Veja o resultado</span></div>
+    <main id="calculator" tabindex="-1">
+      <div class="page-heading">
+        <div class="intro-copy"><div class="eyebrow">UMA FERRAMENTA DO KUSH ARCHIVES</div><h1>O DIFAL, <span>sem complicar.</span></h1><p>Da sua nota ou orçamento para um cálculo claro.<br>Importe, confira os itens e deixe as contas com a gente.</p>
+          <div class="hero-actions"><button class="button primary" id="sidebar-import"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5"/></svg>Importar documento</button><button class="button secondary" id="new-button"><span aria-hidden="true">＋</span>Novo cálculo</button></div>
+          <span class="private-label"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6zm-4 9 3 3 5-6"/></svg>Sem cadastro. Seus arquivos ficam no seu dispositivo.</span>
+        </div>
+        <div class="hero-illustration" aria-hidden="true"><svg viewBox="0 0 270 230" fill="none"><path d="M36 149c-28-31-11-75 31-86 22-6 40-40 77-30 32 8 38 40 63 56 54 36 29 108-30 112-45 3-109-14-141-52Z" fill="#f4f4f4"/><g transform="rotate(-9 121 118)" stroke="#1a1a1a" stroke-width="2.4"><rect x="65" y="40" width="113" height="153" rx="18" fill="white"/><rect x="80" y="56" width="83" height="33" rx="8" fill="#c9dcff"/><path d="M119 75h29"/><rect x="81" y="104" width="18" height="17" rx="5"/><rect x="113" y="104" width="18" height="17" rx="5"/><rect x="145" y="104" width="18" height="17" rx="5"/><rect x="81" y="134" width="18" height="17" rx="5"/><rect x="113" y="134" width="18" height="17" rx="5"/><rect x="145" y="134" width="18" height="46" rx="5" fill="#1a1a1a"/><rect x="81" y="163" width="50" height="17" rx="5"/></g><circle cx="200" cy="154" r="28" fill="#ffe9c9" stroke="#1a1a1a" stroke-width="2.4"/><path d="m188 154 8 8 15-17M211 50v18m-9-9h18M39 107l-5-8m13 3-4-8" stroke="#1a1a1a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </div>
+      <div class="workflow-bar"><div class="steps" aria-label="Etapas do cálculo"><span class="step current"><b>1</b> Importe</span><i></i><span class="step" id="step-review"><b>2</b> Confira os dados</span><i></i><span class="step" id="step-result"><b>3</b> Calcule</span></div><button id="history-button" class="history-button"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 5v6h6m3-5v6l4 2"/></svg>Histórico<span id="history-count" class="count">0</span></button></div>
       <div id="message" class="message" role="status" hidden></div>
       <div class="content-grid">
         <div class="left-column">
           <section class="card import-card"><div class="section-heading"><div><span class="section-number">01</span><h2>Seu documento</h2></div><span class="pill">IMPORTAÇÃO PRÁTICA</span></div>
-            <div class="dropzone" id="dropzone"><div class="upload-art"><span class="document-icon">≡</span><span class="upload-badge">↑</span></div><h3>Arraste seu arquivo até aqui</h3><p>ou selecione um documento no seu computador</p><button class="button primary" id="upload-button"><span>↑</span> Selecionar arquivo</button><span class="file-types">XML, CSV, PDF ou foto · até 5 MB</span><input type="file" id="file-input" accept=".xml,.csv,.pdf,.png,.jpg,.jpeg,.webp" hidden></div>
+            <div class="dropzone" id="dropzone"><div class="upload-art" aria-hidden="true"><svg viewBox="0 0 64 72" fill="none"><path d="M13 5h25l13 13v45a4 4 0 0 1-4 4H13a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Z" fill="white" stroke="currentColor" stroke-width="2"/><path d="M37 5v14h14M20 29h19m-19 9h12m-7 12 7-7 7 7m-7-7v15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Arraste seu arquivo até aqui</h3><p>ou selecione um documento no seu computador</p><button class="button primary" id="upload-button"><span>↑</span> Selecionar arquivo</button><span class="file-types">XML, CSV, PDF ou foto · até 5 MB</span><input type="file" id="file-input" accept=".xml,.csv,.pdf,.png,.jpg,.jpeg,.webp" hidden></div>
             <div class="import-footer"><span>ⓘ &nbsp; Não tem um arquivo? <button class="text-button" id="manual-button">Adicione os itens manualmente</button></span><button class="text-button muted" id="template-button">↓ Modelo CSV</button></div>
             <div id="file-info" class="file-info" hidden><span>▤</span><div><strong id="file-name"></strong><small id="file-details"></small></div><span class="success-mark">✓ Importado</span></div>
-          <div class="reader-entry"><span class="reader-spark">✧</span><div><strong>Seu orçamento está em PDF ou foto?</strong><small>Extraia os itens com leitura de PDF e OCR, sem chave.</small></div><button id="reader-button" class="text-button">Ler PDF / foto <svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></button></div></section>
+          <div class="reader-entry"><span class="reader-spark" aria-hidden="true"><svg class="icon" viewBox="0 0 24 24"><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5Z"/></svg></span><div><strong>Seu orçamento está em PDF ou foto?</strong><small>Leia o documento aqui, sem enviar seus arquivos.</small></div><button id="reader-button" class="text-button">Ler PDF / foto <svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></button></div></section>
           <section class="card operation-card"><div class="section-heading"><div><span class="section-number">02</span><h2>Dados da operação</h2></div><span class="subtle">Confira antes de calcular</span></div>
             <div class="route-fields"><label>Estado de origem<select id="origin" aria-label="Estado de origem"></select></label><span class="route-arrow">→</span><label>Estado de destino<select id="destination" aria-label="Estado de destino"></select></label></div>
             <div class="field-row"><label>ICMS interno do destino <span class="required">*</span><div class="input-suffix"><input id="internal-rate" type="number" min="0" max="99" step="0.01" placeholder="Ex.: 18"><span>%</span></div></label><label>ICMS interestadual<div class="input-suffix"><input id="interstate-rate" type="number" min="0" max="99" step="0.01" value="12"><span>%</span></div></label><label>FCP<div class="input-suffix"><input id="fcp-rate" type="number" min="0" max="99" step="0.01" value="0"><span>%</span></div></label></div>
@@ -40,7 +51,7 @@
         </div>
         <aside class="right-column"><section class="summary-card"><div class="summary-title"><span><svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></span><h2>Resumo do cálculo</h2><span class="live-badge">SIMULAÇÃO</span></div><p class="summary-caption" id="summary-caption">Tudo o que você precisa, em um só lugar.</p><div class="summary-route"><span id="summary-origin">SP</span><i>⟶</i><span id="summary-destination">RJ</span><small>Operação interestadual</small></div><dl><div><dt>Base de cálculo</dt><dd id="summary-base">R$ 0,00</dd></div><div><dt>DIFAL <span id="difal-percent">—</span></dt><dd id="summary-difal">R$ 0,00</dd></div><div><dt>FCP <span id="fcp-percent">0%</span></dt><dd id="summary-fcp">R$ 0,00</dd></div></dl><div class="summary-total"><span>Total a recolher estimado</span><strong id="summary-total">R$ 0<span>,00</span></strong><small>DIFAL + Fundo de Combate à Pobreza</small></div><button class="button calculate-button" id="calculate-button">Calcular DIFAL <span>→</span></button><button class="export-button" id="export-button" disabled>↓ &nbsp; Exportar resultado</button><p class="summary-disclaimer">Simulação pela base única, sem benefícios fiscais ou ICMS-ST. Confira o enquadramento antes de recolher.</p></section><div class="help-card"><span>✧</span><div><strong>Como o cálculo funciona?</strong><p>Entenda as alíquotas e o que compõe o seu DIFAL.</p><button class="text-button" id="learn-button">Entender o cálculo <span><svg class="inline-arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 13 13 3M3 3h10v10"/></svg></span></button></div></div><div class="privacy-note"><span>♧</span> XML e CSV ficam no navegador.<br>PDFs e fotos também são lidos no seu navegador.</div></aside>
       </div>
-      <footer><span class="footer-brand">kush.</span><span>Mais tempo para o seu negócio. Menos tempo fazendo contas.</span><span>DIFAL com clareza <span class="green-dot">●</span></span></footer>
+      <footer><a class="footer-brand" href="https://kush-archives.com.br" target="_blank" rel="noopener noreferrer">kush4rchives</a><span>Ferramentas simples. Mais tempo para criar.</span><span>© 2026 kush4rchives</span></footer>
     </main>
   </div>
   <dialog id="item-dialog"><form id="item-form"><div class="modal-heading"><h2 id="item-dialog-title">Adicionar item</h2><button type="button" class="icon-button close-dialog" aria-label="Fechar">×</button></div><label>Descrição<input name="description" required maxlength="200" placeholder="Nome do produto"></label><div class="field-row"><label>NCM<input name="ncm" maxlength="8" pattern="[0-9]{8}|" placeholder="8 dígitos"></label><label>Quantidade<input name="quantity" type="number" min="0.0001" step="any" value="1" required></label></div><div class="field-row"><label>Valor unitário (R$)<input name="price" type="number" min="0" step="any" required></label><label>Frete (R$)<input name="freight" type="number" min="0" step="any" value="0" required></label></div><div class="field-row"><label>Outras despesas + IPI (R$)<input name="other" type="number" min="0" step="any" value="0" required></label><label>Desconto (R$)<input name="discount" type="number" min="0" step="any" value="0" required></label></div><p class="field-help">Informe apenas os valores que integram a base fiscal aplicável.</p><p id="item-error" class="form-error" role="alert"></p><button class="button primary" type="submit">Salvar item</button></form></dialog>

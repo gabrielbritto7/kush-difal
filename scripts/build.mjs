@@ -1,6 +1,6 @@
 import { mkdir, rm, copyFile, cp, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const output=join(root,'public');
 await rm(output,{recursive:true,force:true});
@@ -8,6 +8,13 @@ await mkdir(join(output,'vendor/core'),{recursive:true});
 await mkdir(join(output,'vendor/lang'),{recursive:true});
 for(const file of ['index.html','styles.css','app.js','calculator.js','document-parser.js','browser-reader.js']) await copyFile(join(root,file),join(output,file));
 const modules=join(root,'node_modules');
+await cp(join(root,'assets'),join(output,'assets'),{recursive:true});
+await mkdir(join(output,'assets/fonts'),{recursive:true});
+await mkdir(join(output,'assets/licenses'),{recursive:true});
+for(const [font,weights] of [['fredoka',[500,600]],['quicksand',[500,600,700]]]) {
+  for(const weight of weights) {const file=`${font}-latin-${weight}-normal.woff2`; await copyFile(join(modules,'@fontsource',font,'files',file),join(output,'assets/fonts',file));}
+  await copyFile(join(modules,'@fontsource',font,'LICENSE'),join(output,'assets/licenses',font+'.txt'));
+}
 for(const file of ['pdf.min.mjs','pdf.worker.min.mjs']) await copyFile(join(modules,'pdfjs-dist/build',file),join(output,'vendor',file));
 for(const folder of ['wasm','cmaps','standard_fonts']) await cp(join(modules,'pdfjs-dist',folder),join(output,'vendor',folder),{recursive:true});
 await copyFile(join(modules,'tesseract.js/dist/tesseract.esm.min.js'),join(output,'vendor/tesseract.mjs'));

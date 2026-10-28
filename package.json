@@ -1,0 +1,22 @@
+{
+  "name": "kush-difal",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --use-env-proxy server.mjs",
+    "start": "node --use-env-proxy server.mjs",
+    "test": "node tests/calculator.test.js && node tests/parsing.test.js",
+    "check": "node --check app.js && node --check calculator.js && node --check server.mjs && node --check document-reader.mjs && node --check document-parser.js && node --check browser-reader.js && node --check scripts/build.mjs",
+    "build": "node scripts/build.mjs",
+    "test:native": "node tests/documents.test.js"
+  },
+  "engines": {
+    "node": ">=24.5.0"
+  },
+  "dependencies": {
+    "@tesseract.js-data/por": "1.0.0",
+    "pdfjs-dist": "6.4.299",
+    "tesseract.js": "7.0.0"
+  }
+}

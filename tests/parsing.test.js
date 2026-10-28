@@ -19,3 +19,8 @@ test('rejects inconsistent totals and ignores unknown layouts instead of guessin
 test('editable CSV roundtrip, decimals and escaped product names',()=>{
   const item={description:'Mesa; "clara"',ncm:'',quantity:2.5,price:150,freight:10,other:0,discount:0}; assert.deepEqual(parseCSV(itemsToCSV([item])),[item]);
 });
+
+test('common invoice headings and extra fiscal columns preserve product fields',()=>{
+  const result=parseDocumentText('Codigo  Descricao do produto / servico  NCM  CFOP  UN  QTD  Vr. Unit. (R$)  Total\n123  Mesa industrial  94036000  6102  UN  2  150,00  300,00');
+  assert.equal(result.items.length,1);assert.equal(result.items[0].description,'Mesa industrial');assert.equal(result.items[0].price,150);
+});

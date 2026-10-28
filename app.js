@@ -1,13 +1,13 @@
 import { readDocument, readerStatus } from './browser-reader.js';
 import { aiStatus, readWithAI, serviceURL } from './document-ai-client.js';
 import { itemsToCSV } from './document-parser.js';
-import { STATES, interstateRate, calculate, parseCSV, round } from './calculator.js';
+import { STATES, interstateRate, calculate, parseCSV, parseNumber, round } from './calculator.js';
 
 const $ = id => document.getElementById(id);
 const money = value => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const names = { AC:'Acre', AL:'Alagoas', AP:'Amapá', AM:'Amazonas', BA:'Bahia', CE:'Ceará', DF:'Distrito Federal', ES:'Espírito Santo', GO:'Goiás', MA:'Maranhão', MT:'Mato Grosso', MS:'Mato Grosso do Sul', MG:'Minas Gerais', PA:'Pará', PB:'Paraíba', PR:'Paraná', PE:'Pernambuco', PI:'Piauí', RJ:'Rio de Janeiro', RN:'Rio Grande do Norte', RS:'Rio Grande do Sul', RO:'Rondônia', RR:'Roraima', SC:'Santa Catarina', SP:'São Paulo', SE:'Sergipe', TO:'Tocantins' };
 let items = [], result = null, editing = -1, sourceName = 'Inclusão manual';
-let readerAvailable=false, readerLoading=false, pendingDocument=null, readerVersion=0, aiConfigLoaded=false, readerCheckVersion=0;
+let readerAvailable=false, readerLoading=false, pendingDocument=null, readerVersion=0, aiConfigLoaded=false, readerCheckVersion=0, readerRows=[], readerCSVInvalid=false;
 try { $('reader-service').value=localStorage.getItem('kush-document-ai-url') || ''; } catch {}
 let history = [];
 try { const saved = JSON.parse(localStorage.getItem('kush-history') || '[]'); if (Array.isArray(saved)) history = saved.filter(x => x && STATES.includes(x.origin) && STATES.includes(x.destination) && Number.isFinite(x.total) && Number.isFinite(x.base) && Number.isFinite(x.count) && Number.isFinite(new Date(x.date).getTime())).slice(0, 20); } catch {}
@@ -227,7 +227,43 @@ function clearPendingDocument() { readerVersion++; pendingDocument=null; $('read
 $('reader-file').onchange=clearPendingDocument;
 $('reader-consent').onchange=updateReaderButtons;
 $('reader-reviewed').onchange=updateReaderButtons;
-$('reader-csv').oninput=()=>{ $('reader-reviewed').checked=false; updateReaderButtons(); };
+function renderReaderRows(){
+  $('reader-products').replaceChildren();
+  readerRows.forEach((row,index)=>{
+    const card=document.createElement('div');card.className='reader-product';
+    const heading=document.createElement('div');heading.className='reader-product-title';const title=document.createElement('strong');title.textContent=`Produto ${index+1}`;
+    const remove=document.createElement('button');remove.type='button';remove.className='text-button';remove.textContent='Remover';remove.onclick=()=>{readerRows.splice(index,1);renderReaderRows();syncReaderCSV();};heading.append(title,remove);card.append(heading);
+    for(const fields of [[['description','Descrição do produto'],['ncm','NCM (opcional)']],[['quantity','Quantidade'],['price','Valor unitário (R$)']],[['freight','Frete (R$)'],['other','Despesas + IPI (R$)'],['discount','Desconto (R$)']]]){
+      const group=document.createElement('div');group.className='field-row';
+      for(const [key,labelText]of fields){const label=document.createElement('label');label.textContent=labelText;const input=document.createElement('input');input.dataset.field=key;input.dataset.row=index;input.value=row[key]??'';input.required=['description','quantity','price'].includes(key);input.maxLength=key==='description'?500:key==='ncm'?8:30;
+        if(key!=='description'&&key!=='ncm')input.inputMode='decimal';if(key==='ncm')input.pattern='[0-9]{8}|';
+        input.oninput=()=>{row[key]=input.value;syncReaderCSV();};label.append(input);group.append(label);}
+      if(fields[0][0]==='freight'){const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Frete, despesas e desconto';details.append(summary,group);card.append(details);}else card.append(group);
+    }
+    $('reader-products').append(card);
+  });
+}
+function reviewedReaderItems(){
+  if(!readerRows.length)throw new Error('Adicione pelo menos um produto.');
+  return readerRows.map((row,index)=>{
+    if(!String(row.description||'').trim()||!String(row.quantity??'').trim()||!String(row.price??'').trim())throw new Error(`Preencha descrição, quantidade e valor unitário do produto ${index+1}.`);
+    const item={description:String(row.description).trim(),ncm:String(row.ncm||'').trim()};
+    if(item.ncm&&!/^\d{8}$/.test(item.ncm))throw new Error(`Confira o NCM do produto ${index+1}: use 8 dígitos ou deixe em branco.`);
+    for(const key of ['quantity','price','freight','other','discount'])item[key]=parseNumber(row[key]);
+    return item;
+  });
+}
+function syncReaderCSV(){
+  readerCSVInvalid=false;$('reader-reviewed').checked=false;
+  try{$('reader-csv').value=itemsToCSV(reviewedReaderItems());}catch{}
+  updateReaderButtons();
+}
+$('reader-add-product').onclick=()=>{readerRows.push({description:'',ncm:'',quantity:'',price:'',freight:0,other:0,discount:0});renderReaderRows();syncReaderCSV();$('reader-products').lastElementChild.querySelector('input').focus();};
+$('reader-csv').oninput=()=>{
+  $('reader-reviewed').checked=false;
+  try{readerRows=parseCSV($('reader-csv').value);readerCSVInvalid=false;renderReaderRows();}catch{readerCSVInvalid=true;}
+  updateReaderButtons();
+};
 $('reader-submit').onclick=async()=>{
   if (readerLoading || !readerAvailable || !$('reader-consent').checked) return;
   const file=$('reader-file').files[0]; if (!file) return;
@@ -248,14 +284,19 @@ $('reader-submit').onclick=async()=>{
     $('reader-table-details').hidden=parsed.method!=='docling';
     $('reader-warnings').textContent=(parsed.warnings || []).join(' ');
     $('reader-csv').value=itemsToCSV(parsed.items);
-    $('reader-status').textContent='Leitura concluída. Confira o texto extraído e ajuste os itens antes de importar.';
+    readerRows=parsed.items.length?parsed.items.map(item=>({...item})):[{description:'',ncm:'',quantity:'',price:'',freight:0,other:0,discount:0}];readerCSVInvalid=false;renderReaderRows();
+    $('reader-products-help').textContent=parsed.items.length?'Confira os valores reconhecidos. Corrija os campos ou acrescente produtos faltantes antes de continuar.':'O texto foi lido, mas os produtos não foram identificados. Preencha os campos abaixo usando o documento como referência; você poderá prosseguir sem editar CSV.';
+    if(!parsed.items.length)$('reader-text').closest('details').open=true;
+    $('reader-status').textContent=parsed.items.length?'Leitura concluída. Confira os produtos e continue para os dados da operação.':'Texto extraído. Complete os produtos abaixo para continuar com o cálculo.';
   } catch(error) { $('reader-error').textContent=error.name==='TimeoutError' ? 'Tempo de leitura excedido. Divida o documento ou use XML/CSV.' : error.message; $('reader-status').textContent='A leitura não foi concluída. Os itens do cálculo atual foram preservados.'; }
   finally { readerLoading=false; $('reader-submit').textContent='Extrair texto e itens'; updateReaderButtons(); }
 };
 $('reader-import').onclick=()=>{
   if (!pendingDocument || !$('reader-reviewed').checked || readerLoading) return;
   try {
-    const reviewed=parseCSV($('reader-csv').value);
+    if(readerCSVInvalid)throw new Error('O CSV avançado contém erros. Corrija-o ou preencha os campos dos produtos.');
+    for(const input of $('reader-products').querySelectorAll('input'))if(!input.reportValidity())return;
+    const reviewed=reviewedReaderItems();
     calculate({items:reviewed,origin:'SP',destination:'RJ',internalRate:18,interstate:12,fcp:0});
     if (reviewed.length>500) throw new Error('Limite de 500 itens por documento.');
     if (items.length && !window.confirm('Substituir os itens atuais pelos itens conferidos deste documento?')) return;
@@ -265,8 +306,9 @@ $('reader-import').onclick=()=>{
     $('destination').value=STATES.includes(pendingDocument.destination)?pendingDocument.destination:'';
     suggestRate(); renderItems();
     $('file-name').textContent=pendingDocument.name; $('file-details').textContent=`${items.length} itens conferidos · ${pendingDocument.method==='docling'?'IA Docling':'leitura no navegador'}`; $('file-info').hidden=false;
-    message('Itens importados após conferência. Complete as UFs, as alíquotas, os componentes da base e o enquadramento fiscal antes de calcular.');
+    message('Produtos importados. Agora selecione origem e destino, informe o ICMS interno e confirme se a operação é para consumidor final não contribuinte. Depois clique em Calcular DIFAL.');
+    $('origin').focus();
     $('reader-dialog').close(); $('reader-file').value=''; $('reader-consent').checked=false; clearPendingDocument();
-    $('items-container').scrollIntoView({behavior:'smooth',block:'center'});
+    $('origin').closest('.operation-card').scrollIntoView({behavior:'smooth',block:'center'});
   } catch(error) { $('reader-error').textContent=error.message; }
 };

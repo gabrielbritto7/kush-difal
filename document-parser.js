@@ -3,11 +3,11 @@ import { parseNumber, parseCSV, round, STATES } from './calculator.js';
 const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const numeric = '(?:\\d{1,3}(?:\\.\\d{3})+|\\d+)(?:[,.]\\d+)?';
 const headerName = text => {
-  text = normalize(text).trim().replace(/[.:]/g, '').replace(/\s+/g, ' ');
-  if (/^(descricao(?: do produto(?:\/servico)?)?|produto|item)$/.test(text)) return 'description';
+  text = normalize(text).trim().replace(/[.:]/g, '').replace(/\(r\$\)|r\$/g,'').trim().replace(/\s+/g, ' ');
+  if (/^(descricao(?: d[oe]s? produtos?(?:\s*\/\s*servicos?)?)?|discriminacao|produto|item)$/.test(text)) return 'description';
   if (/^ncm(?:\/sh)?$/.test(text)) return 'ncm';
   if (/^(qtd|qtde|quant|quantidade)$/.test(text)) return 'quantity';
-  if (/^(v(?:alor)? unit(?:ario)?|preco unit(?:ario)?|vl(?:r)? unit(?:ario)?)$/.test(text)) return 'price';
+  if (/^(v(?:alor)? unit(?:ario)?|preco unit(?:ario)?|vl(?:r)? unit(?:ario)?|vr unit(?:ario)?)$/.test(text)) return 'price';
   if (/^(v(?:alor)? total|total|vl(?:r)? total)$/.test(text)) return 'total';
   if (/^(un|und|unid|unidade)$/.test(text)) return 'unit';
   if (/^(cod|codigo)$/.test(text)) return 'code';
@@ -36,7 +36,7 @@ export function parseDocumentText(text) {
     const normalized=normalize(line);
     const cells=line.trim().split(/\s{2,}|\t+|\s*\|\s*/);
     const candidate=cells.map(headerName);
-    if (candidate.includes('description') && candidate.includes('quantity') && candidate.includes('price') && candidate.every(Boolean) && new Set(candidate).size===candidate.length) { columns=candidate; simpleHeader=false; continue; }
+    if (candidate.includes('description') && candidate.includes('quantity') && candidate.includes('price') && new Set(candidate.filter(Boolean)).size===candidate.filter(Boolean).length) { columns=candidate; simpleHeader=false; continue; }
     // A compact OCR table is recognized only with an explicit simple column order.
     if (/^\s*(?:codigo\s+)?(?:descricao|produto)(?: do produto)?\s+(?:ncm\s+)?(?:qtd\.?|qtde\.?|quantidade)\s+(?:(?:un\.?|unidade)\s+)?(?:valor|v\.?|preco)\s*unit(?:ario)?\.?\s+(?:valor\s+)?total\s*$/.test(normalized)) { columns=null; simpleHeader=true; hasNcm=/\bncm\b/.test(normalized); continue; }
     if (/^\s*(?:total(?:\s|:)|subtotal|frete\b|desconto\b|observac|dados adicionais|base de calculo|valor do)/.test(normalized)) { columns=null; simpleHeader=false; continue; }

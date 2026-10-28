@@ -69,3 +69,7 @@ O site segue a identidade dos projetos PDF (`ilovekush`) e Bitmap do Kush Archiv
 ## Situação da integração Docling
 
 O frontend permite selecionar IA Docling, informar a URL, autorizar o envio, revisar texto/tabelas e importar itens conferidos. O backend possui API, teste do adaptador com classes reais do SDK, validações e arquivos de publicação Docker. Os testes da API simulam a inferência; a tentativa de inicializar modelos reais foi bloqueada por `403` no proxy ao acessar Hugging Face. Não há extração real com pesos validada nesta sessão. As instruções completas e os limites estão em [backend/README.md](backend/README.md).
+
+## Quando os produtos não forem identificados
+
+A leitura local é a opção padrão e não exige backend. Depois da extração, a revisão mostra campos de descrição, NCM opcional, quantidade, valor unitário, frete, despesas e desconto. Se nenhum item for reconhecido, um produto vazio aparece para preenchimento a partir do documento, sem precisar editar CSV. Após conferir e importar, a página leva aos estados e alíquotas necessários ao cálculo. O CSV permanece como opção avançada. Isso permite continuar manualmente; não transforma o OCR em uma IA nem garante reconhecimento automático de layouts desconhecidos.

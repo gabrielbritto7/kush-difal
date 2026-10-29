@@ -29,6 +29,10 @@ Para publicar `difal.kush-archives.com.br`, associe o domínio ao projeto e apli
 
 O reconhecimento não é universal. O modelo pode falhar em tabelas diferentes, múltiplas colunas de cabeçalho, texto ilegível, fotografias inclinadas ou valores ambíguos. Uma soma que confere não certifica todos os caracteres da descrição ou dados fiscais. Não inventamos NCM, UF de origem, alíquotas ou enquadramento quando ausentes. O resultado fiscal depende desses dados e da confirmação do usuário.
 
+As UFs são procuradas nas indicações de origem/destino e nos endereços dos blocos de emitente/fornecedor e destinatário/cliente. Siglas, nomes completos dos estados e colunas de UF são aceitos. O resumo mostra os estados reconhecidos e os seletores continuam editáveis; mudar a rota atualiza a sugestão interestadual. UFs ausentes ou conflitantes ficam sem seleção, sem herdar a rota de outro arquivo. Não se deduz UF por telefone, CNPJ, código de produto, nome do arquivo ou município sem estado.
+
+Uma tabela pode automatizar também ICMS interno e FCP, mas deve ter vigência, fonte e enquadramento do produto. O projeto ainda não inclui uma tabela estadual validada para essa finalidade: o XML pode fornecer alíquotas uniformes já informadas na NF-e; fora disso, o ICMS interno e FCP continuam sujeitos à conferência.
+
 **NFS-e de serviços é identificada separadamente.** O site mostra a descrição/valor quando legíveis e não importa a nota como mercadoria para este cálculo de DIFAL/ICMS. Isso não é uma consulta à SEFAZ, verificação de autenticidade ou parecer tributário.
 
 XML original de NF-e e CSV continuam com importação direta. O modelo neural é usado na leitura de PDF/foto. Limites: 5 MB, PDF até 10 páginas, imagens até 25 megapixels, até 500 produtos. O reconhecimento expira em cinco minutos e libera os workers.
@@ -64,7 +68,7 @@ Substitua os valores de exemplo pelos totais e quantidade de linhas do documento
 
 A origem, hashes e licença do modelo estão em `assets/models`. `scripts/prepare-table-model.py` reproduz a conversão e compara as saídas numéricas com o modelo original. Os pesos aprendidos não são retreinados. O build e o worker verificam o hash do artefato convertido. Não há download de pesos externos durante o deploy; Python não é necessário na Vercel. Avisos de licença acompanham os assets.
 
-A identidade visual usa Fredoka/Quicksand locais, fundo branco, contornos pretos e botões arredondados dos projetos PDF/Bitmap do Kush Archives.
+A identidade visual usa Fredoka/Quicksand locais, fundo branco, contornos pretos e botões arredondados dos projetos PDF/Bitmap do Kush Archives. A ilustração da calculadora e os ícones do leitor e do resumo usam somente preto, branco e cinza.
 
 ## Escopo fiscal
 

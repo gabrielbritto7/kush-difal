@@ -13,7 +13,12 @@ for (const id of ['origin','destination']) {
   $(id).add(new Option('Selecione a UF', ''));
   for (const uf of STATES) $(id).add(new Option(`${uf} — ${names[uf]}`, uf));
 }
-$('origin').value = 'SP'; $('destination').value = 'RJ';
+$('origin').value = ''; $('destination').value = '';
+function applyDocumentRoute(parsed){
+  for(const role of ['origin','destination'])$(role).value=STATES.includes(parsed[role])?parsed[role]:'';
+  const identified=[['origin','Origem'],['destination','Destino']].map(([role,label])=>`${label}: ${parsed[role]||(role==='origin'?'não identificada':'não identificado')}${parsed.routeSources?.[role]?` (${parsed.routeSources[role]})`:''}.`);
+  $('route-status').textContent=identified.join(' ')+' Você pode alterar os estados nos campos acima.';
+}
 function message(text, error = false) { $('message').textContent = text; $('message').classList.toggle('error', error); $('message').hidden = !text; }
 function settings() {
   if (!STATES.includes($('origin').value) || !STATES.includes($('destination').value)) throw new Error('Selecione os estados de origem e destino.');
@@ -52,6 +57,7 @@ function renderItems() {
 }
 function suggestRate() { $('interstate-rate').value = STATES.includes($('origin').value) && STATES.includes($('destination').value) ? interstateRate($('origin').value, $('destination').value, $('imported').checked) : ''; clearResult(); }
 for (const id of ['origin','destination','imported']) $(id).addEventListener('change', suggestRate);
+for(const role of ['origin','destination'])$(role).addEventListener('change',()=>{$('route-status').textContent='Estados ajustados por você. A alíquota interestadual acompanha a rota selecionada.';});
 for (const id of ['internal-rate','interstate-rate','fcp-rate','eligible']) $(id).addEventListener('input', clearResult);
 function openItem(index = -1) {
   editing = index; $('item-form').reset(); $('item-error').textContent = '';
@@ -127,8 +133,7 @@ async function importFile(file) {
     // Replace document settings too, so rates from a previous invoice cannot leak into a new import.
     $('internal-rate').value = parsed.internalRate ?? ''; $('fcp-rate').value = parsed.fcp ?? 0;
     $('eligible').checked = parsed.eligible ?? true; $('imported').checked = parsed.interstate === 4;
-    if (parsed.origin) $('origin').value = parsed.origin;
-    if (parsed.destination) $('destination').value = parsed.destination;
+    applyDocumentRoute(parsed);
     suggestRate();
     if (parsed.interstate !== null && parsed.interstate !== undefined) $('interstate-rate').value = parsed.interstate;
     items = parsed.items; sourceName = file.name; renderItems();
@@ -175,7 +180,7 @@ $('export-button').onclick = () => {
 };
 $('new-button').onclick = () => {
   if (items.length && !window.confirm('Limpar os dados e iniciar um novo cálculo?')) return;
-  items=[]; sourceName='Inclusão manual'; $('origin').value='SP'; $('destination').value='RJ'; $('internal-rate').value=''; $('interstate-rate').value=12; $('fcp-rate').value=0; $('imported').checked=false; $('eligible').checked=true; $('file-info').hidden=true; message(''); renderItems();
+  items=[]; sourceName='Inclusão manual'; $('origin').value=''; $('destination').value=''; $('route-status').textContent='Os estados serão preenchidos a partir dos endereços do documento. Você pode alterar a seleção.'; $('internal-rate').value=''; $('interstate-rate').value=''; $('fcp-rate').value=0; $('imported').checked=false; $('eligible').checked=true; $('file-info').hidden=true; message(''); renderItems();
 };
 $('history-count').textContent = history.length;
 renderItems();
@@ -273,11 +278,10 @@ $('reader-import').onclick=()=>{
     if (items.length && !window.confirm('Substituir os itens atuais pelos itens conferidos deste documento?')) return;
     items=reviewed; sourceName=pendingDocument.name+' (IA local conferida)';
     $('internal-rate').value=''; $('fcp-rate').value=0; $('eligible').checked=false; $('imported').checked=false;
-    $('origin').value=STATES.includes(pendingDocument.origin)?pendingDocument.origin:'';
-    $('destination').value=STATES.includes(pendingDocument.destination)?pendingDocument.destination:'';
+    applyDocumentRoute(pendingDocument);
     suggestRate(); renderItems();
     $('file-name').textContent=pendingDocument.name; $('file-details').textContent=`${items.length} itens reconhecidos por IA · processamento local`; $('file-info').hidden=false;
-    message('Produtos importados. Agora selecione origem e destino, informe o ICMS interno e confirme se a operação é para consumidor final não contribuinte. Depois clique em Calcular DIFAL.');
+    message('Produtos importados. Os estados identificados no documento já estão selecionados e podem ser alterados. Confira os dados da operação e as alíquotas antes de calcular.');
     $('origin').focus();
     $('reader-dialog').close(); $('reader-file').value=''; clearPendingDocument();
     $('origin').closest('.operation-card').scrollIntoView({behavior:'smooth',block:'center'});
@@ -290,6 +294,8 @@ function renderRecognitionSummary(parsed){
   if(parsed.blocked){if(Number.isFinite(parsed.service?.amount))add('Valor do serviço',money(parsed.service.amount));add('Tipo do documento','NFS-e · ISSQN');return;}
   const v=parsed.verification||{};
   add('Produtos reconhecidos',String(parsed.items.length));
+  add('Origem identificada',parsed.origin||'Não informada / ambígua');
+  add('Destino identificado',parsed.destination||'Não informado / ambíguo');
   if(Number.isFinite(v.products))add('Total dos produtos',money(v.products));
   if(v.delivery)add('Entrega / frete identificado',money(v.delivery));
   if(Number.isFinite(v.base))add('Total da base reconhecida',money(v.base));

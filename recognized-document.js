@@ -1,4 +1,5 @@
-import { parseNumber,round,STATES } from './calculator.js';
+import { parseNumber,round } from './calculator.js';
+import { extractDocumentRoute } from './document-route.js';
 
 export const normalize=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 function editDistance(a,b){
@@ -57,12 +58,8 @@ function allocate(items,key,total){
   for(const share of [...shares].sort((a,b)=>b.remainder-a.remainder).slice(0,cents-used))share.cents++;
   for(const share of shares)items[share.index][key]=round(items[share.index][key]+share.cents/100);
 }
-function stateIn(text,label){
-  const explicit=normalize(text).match(new RegExp(`(?:^|\\n)\\s*(?:estado de )?${label}\\s*[:=-]\\s*([a-z]{2})\\b`));
-  const value=explicit?.[1].toUpperCase();return STATES.includes(value)?value:null;
-}
 export function recognizeDocument(tables,text){
-  const kind=documentKind(text);
+  const kind=documentKind(text),route=extractDocumentRoute(text);
   if(kind==='service_invoice'){
     const lines=text.split(/\r?\n/),index=lines.findIndex(line=>/descricao do servico/.test(normalize(line)));
     let amount=amountAfter(text,[/valor da operacao\s*\/\s*servico/,/valor liquido da nfs\s*-?\s*e/]);
@@ -71,7 +68,7 @@ export function recognizeDocument(tables,text){
       const nearby=label?text.slice(label.index+label[0].length).split(/\r?\n/).slice(0,3).join(' '):'';
       const money=nearby.match(/R\$\s*(\d[\d.]*,\d{2})/);if(money)amount=valueOf(money[1]);
     }
-    return {items:[],origin:null,destination:null,text,tables,documentType:kind,blocked:true,service:{description:index>=0?lines[index+1]?.trim()||'':'',amount},warnings:['Documento identificado como NFS-e de serviços (ISSQN). Esta calculadora trata DIFAL de ICMS sobre mercadorias: o valor desta nota não será importado como produto.'],verification:{complete:false,reason:'service_invoice'}};
+    return {items:[],...route,text,tables,documentType:kind,blocked:true,service:{description:index>=0?lines[index+1]?.trim()||'':'',amount},warnings:['Documento identificado como NFS-e de serviços (ISSQN). Esta calculadora trata DIFAL de ICMS sobre mercadorias: o valor desta nota não será importado como produto.'],verification:{complete:false,reason:'service_invoice'}};
   }
   const items=[],warnings=[],rejections=[];let detectedRows=0,mappedTables=0;
   for(const [tableIndex,table]of tables.entries()){
@@ -149,7 +146,6 @@ export function recognizeDocument(tables,text){
   if(rejections.length)warnings.push(`${rejections.length} linha(s) foram rejeitadas por valores ilegíveis ou divergentes.`);
   if(!items.length)warnings.push('A IA não reconheceu produtos com quantidade e preço confiáveis neste documento. Não serão inventados itens ou valores.');
   if(items.some(item=>!item.ncm))warnings.push('O documento não informa NCM em todos os itens. Nenhum NCM ou alíquota foi deduzido pela IA.');
-  let destination=stateIn(text,'destino');
-  if(!destination){const match=normalize(text).match(/^\s*cidade\s*[:;]\s*[^\n]*?\s+(?:[-/]\s*)?([a-z]{2})\s*$/m);if(STATES.includes(match?.[1].toUpperCase()))destination=match[1].toUpperCase();}
-  return {items,text,tables,documentType:kind,origin:stateIn(text,'origem'),destination,warnings:[...new Set(warnings)],verification:{complete:items.length>0 && productMatch && totalMatch && !rejections.length,detectedRows,recognizedRows:items.length,rejections,mappedTables,products,declaredProducts,delivery:delivery||0,discount:discount||0,base,declaredTotal}};
+  warnings.push(...route.routeWarnings);
+  return {items,text,tables,documentType:kind,...route,warnings:[...new Set(warnings)],verification:{complete:items.length>0 && productMatch && totalMatch && !rejections.length,detectedRows,recognizedRows:items.length,rejections,mappedTables,products,declaredProducts,delivery:delivery||0,discount:discount||0,base,declaredTotal}};
 }

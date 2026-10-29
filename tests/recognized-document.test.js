@@ -9,7 +9,7 @@ const table={rows:[
   ['001','AB12','Parafuso de aço galvanizado','2,00','10,01','0,00','20,02'],
   ['002','ZX34','Arruela de aço','TIPO A 3,00','2,33','0,00','7,00'],
 ]};
-const text='ORÇAMENTO\nCidade: Cidade Exemplo - PR\nValor Total Produtos: 27,02\n(+)Taxa de Entrega: 4,98\n(-)Desconto: 0,00\n(=)Total Orçamento: 32,00';
+const text='ORÇAMENTO\nCliente: Empresa Exemplo\nCidade: Cidade Exemplo - PR\nValor Total Produtos: 27,02\n(+)Taxa de Entrega: 4,98\n(-)Desconto: 0,00\n(=)Total Orçamento: 32,00';
 test('structured AI cells recover shifted descriptions, overflow and rounded unit prices',()=>{
   const result=recognizeDocument([table],text);
   assert.equal(result.items.length,2);assert.equal(result.verification.complete,true);

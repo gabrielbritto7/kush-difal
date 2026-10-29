@@ -5,7 +5,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
     npm ci --no-audit --no-fund
-COPY index.html styles.css app.js browser-reader.js calculator.js document-parser.js table-model.js table-ai.worker.js browser-table-ai.js recognized-document.js ./
+COPY index.html styles.css app.js browser-reader.js calculator.js document-parser.js document-route.js table-model.js table-ai.worker.js browser-table-ai.js recognized-document.js ./
 COPY scripts ./scripts
 COPY assets ./assets
 RUN npm run build

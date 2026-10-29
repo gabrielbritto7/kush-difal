@@ -20,7 +20,7 @@ function pdfDocument(lines){
 const directory=await mkdtemp(join(tmpdir(),'kush-ai-smoke-'));
 let server,browser;
 try{
-  let budget=argument('--budget');
+  let budget=argument('--budget');const synthetic=!budget;
   if(!budget){
     const row=(description,quantity,price,total)=>description.padEnd(24)+quantity.padEnd(10)+price.padEnd(16)+total;
     budget=join(directory,'budget.pdf');
@@ -60,6 +60,14 @@ try{
   }
   await expectBudget(budget);await page.click('#reader-import');
   assert.equal(await page.locator('#items-body tr').count(),count);
+  const expectedOrigin=argument('--expected-origin')??(synthetic?'SP':undefined),expectedDestination=argument('--expected-destination')??(synthetic?'RJ':undefined);
+  if(expectedOrigin!==undefined)assert.equal(await page.inputValue('#origin'),expectedOrigin,'Origin is populated from the document');
+  if(expectedDestination!==undefined)assert.equal(await page.inputValue('#destination'),expectedDestination,'Destination is populated from the document');
+  if(synthetic){
+    await page.selectOption('#destination','BA');assert.equal(await page.inputValue('#interstate-rate'),'7');
+    await page.selectOption('#destination','RJ');assert.equal(await page.inputValue('#interstate-rate'),'12');
+    assert.match(await page.textContent('#route-status'),/ajustados por você/);
+  }
   await page.selectOption('#origin','SP');await page.selectOption('#destination','RJ');await page.fill('#internal-rate','20');await page.fill('#fcp-rate','0');await page.check('#eligible');await page.click('#calculate-button');
   assert.equal(await page.locator('#export-button').isDisabled(),false);assert.match(await page.textContent('#message'),/concluída/);
   for(const flag of ['--photo','--scan']){const file=argument(flag);if(file)await expectBudget(file);}

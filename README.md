@@ -27,11 +27,17 @@ Para publicar `difal.kush-archives.com.br`, associe o domínio ao projeto e apli
 5. Quantidade × preço é conferido com o total da linha. Pequenas diferenças de arredondamento preservam o total impresso, com aviso. Entrega/frete e desconto globais explicitamente identificados são rateados em centavos; não são adicionados novamente quando já aparecem nas linhas. Encargos não modelados causam divergência de total e exigem conferência.
 6. Quando um total de produtos ou de orçamento está explícito, ele precisa conferir com a soma reconhecida. Linhas rejeitadas ou divergências bloqueiam a importação automática. Os campos aparecem preenchidos; o usuário revisa e confirma, sem ter de redigitar os produtos.
 
-O reconhecimento não é universal. O modelo pode falhar em tabelas diferentes, múltiplas colunas de cabeçalho, texto ilegível, fotografias inclinadas ou valores ambíguos. Uma soma que confere não certifica todos os caracteres da descrição ou dados fiscais. Não inventamos NCM, UF de origem, alíquotas ou enquadramento quando ausentes. O resultado fiscal depende desses dados e da confirmação do usuário.
+O reconhecimento não é universal. O modelo pode falhar em tabelas diferentes, múltiplas colunas de cabeçalho, texto ilegível, fotografias inclinadas ou valores ambíguos. Uma soma que confere não certifica todos os caracteres da descrição ou dados fiscais. Não inventamos NCM, UF de origem ou enquadramento quando ausentes. O ICMS interno padrão vem da tabela de referência descrita abaixo; não é um número gerado pela IA.
 
 As UFs são procuradas nas indicações de origem/destino e nos endereços dos blocos de emitente/fornecedor e destinatário/cliente. Siglas, nomes completos dos estados e colunas de UF são aceitos. O resumo mostra os estados reconhecidos e os seletores continuam editáveis; mudar a rota atualiza a sugestão interestadual. UFs ausentes ou conflitantes ficam sem seleção, sem herdar a rota de outro arquivo. Não se deduz UF por telefone, CNPJ, código de produto, nome do arquivo ou município sem estado.
 
-Uma tabela pode automatizar também ICMS interno e FCP, mas deve ter vigência, fonte e enquadramento do produto. O projeto ainda não inclui uma tabela estadual validada para essa finalidade: o XML pode fornecer alíquotas uniformes já informadas na NF-e; fora disso, o ICMS interno e FCP continuam sujeitos à conferência.
+O ICMS interno é preenchido automaticamente pela UF de destino, usando as 27 alíquotas da diagonal da [tabela indicada pelo usuário](https://www.calculadoraicms.com.br/). A fonte informa atualização em **19/08/2026**; os valores foram consultados em **29/10/2026** e estão versionados em `icms-rates.js`, junto da origem e das datas. Por exemplo, PR recebe 19,5%. Alterar o destino atualiza a alíquota; o campo continua editável. Uma alíquota uniforme explícita no XML da NF-e tem prioridade até o destino ser alterado. Mudar somente origem ou regra de importados preserva o ICMS interno já ajustado.
+
+A tabela usa valores gerais da referência, não regras por NCM, data histórica ou enquadramento especial. Não substitui consulta à legislação. O FCP segue separado e ajustável; confira sua incidência e eventuais adicionais já incluídos na alíquota da fonte para evitar contagem duplicada. Nenhum site externo é consultado ao importar um documento: a tabela é um arquivo estático do próprio deploy.
+
+Para revisar as alíquotas futuramente, execute `npm run update:rates` com acesso à fonte, confira o diff e publique o commit. O script exige todas as 27 UFs, lê somente a diagonal correspondente e rejeita tabela incompleta, inválida ou sem data. A atualização não acontece silenciosamente durante um cálculo ou build.
+
+A opção de consumidor final não contribuinte começa marcada e permanece marcada após leitura de PDF/foto e CSV. XML com indicação explícita contrária mantém o enquadramento do documento e o aviso correspondente. O resumo distingue o total a recolher (DIFAL + FCP) do valor total da operação (base + DIFAL + FCP); o CSV também contém os dois totais. Qualquer alteração invalida os valores calculados até uma nova simulação.
 
 **NFS-e de serviços é identificada separadamente.** O site mostra a descrição/valor quando legíveis e não importa a nota como mercadoria para este cálculo de DIFAL/ICMS. Isso não é uma consulta à SEFAZ, verificação de autenticidade ou parecer tributário.
 
@@ -68,7 +74,7 @@ Substitua os valores de exemplo pelos totais e quantidade de linhas do documento
 
 A origem, hashes e licença do modelo estão em `assets/models`. `scripts/prepare-table-model.py` reproduz a conversão e compara as saídas numéricas com o modelo original. Os pesos aprendidos não são retreinados. O build e o worker verificam o hash do artefato convertido. Não há download de pesos externos durante o deploy; Python não é necessário na Vercel. Avisos de licença acompanham os assets.
 
-A identidade visual usa Fredoka/Quicksand locais, fundo branco, contornos pretos e botões arredondados dos projetos PDF/Bitmap do Kush Archives. A ilustração da calculadora e os ícones do leitor e do resumo usam somente preto, branco e cinza.
+A identidade visual usa Fredoka/Quicksand locais, fundo branco, contornos pretos e botões arredondados dos projetos PDF/Bitmap do Kush Archives. O bloco de apresentação com título e calculadora foi removido. O cabeçalho contém um link para este repositório com a marca do GitHub ([Octicons](https://github.com/primer/octicons), MIT; licença em `assets/octicons-LICENSE.txt`). Os ícones usam somente preto, branco e cinza.
 
 ## Escopo fiscal
 

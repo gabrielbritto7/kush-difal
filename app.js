@@ -1,6 +1,7 @@
 import { readDocument, readerStatus } from './browser-reader.js';
 import { itemsToCSV } from './document-parser.js';
 import { STATES, interstateRate, calculate, parseCSV, parseNumber, round } from './calculator.js';
+import { ICMS_REFERENCE,destinationInternalRate } from './icms-rates.js';
 
 const $ = id => document.getElementById(id);
 const money = value => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -14,8 +15,17 @@ for (const id of ['origin','destination']) {
   for (const uf of STATES) $(id).add(new Option(`${uf} — ${names[uf]}`, uf));
 }
 $('origin').value = ''; $('destination').value = '';
+function suggestInternalRate(documentRate=null){
+  const destination=$('destination').value,reference=destinationInternalRate(destination);
+  const fromDocument=Number.isFinite(documentRate)&&documentRate>=0&&documentRate<100;
+  $('internal-rate').value=fromDocument?documentRate:reference??'';
+  $('internal-rate').dataset.source=fromDocument?'document':reference===null?'none':'table';
+  const date=ICMS_REFERENCE.sourceUpdatedAt.split('-').reverse().join('/');
+  $('internal-rate-status').textContent=fromDocument?'ICMS interno preenchido com a alíquota informada no XML da NF-e.':reference===null?'O ICMS interno será preenchido automaticamente ao identificar ou selecionar o destino.':`ICMS interno de ${destination} preenchido automaticamente pela tabela de ${date}.`;
+}
 function applyDocumentRoute(parsed){
   for(const role of ['origin','destination'])$(role).value=STATES.includes(parsed[role])?parsed[role]:'';
+  suggestInternalRate(parsed.internalRate);
   const identified=[['origin','Origem'],['destination','Destino']].map(([role,label])=>`${label}: ${parsed[role]||(role==='origin'?'não identificada':'não identificado')}${parsed.routeSources?.[role]?` (${parsed.routeSources[role]})`:''}.`);
   $('route-status').textContent=identified.join(' ')+' Você pode alterar os estados nos campos acima.';
 }
@@ -25,13 +35,14 @@ function settings() {
   if (!$('internal-rate').value.trim()) throw new Error('Informe a alíquota interna do destino antes de calcular.');
   if (!$('interstate-rate').value.trim() || !$('fcp-rate').value.trim()) throw new Error('Preencha as alíquotas interestadual e FCP (use zero quando não aplicável).');
   if (!$('eligible').checked) throw new Error('Esta versão cobre consumidor final não contribuinte. Para outras operações, é necessária análise tributária específica.');
-  return { origin: $('origin').value, destination: $('destination').value, internalRate: Number($('internal-rate').value), interstate: Number($('interstate-rate').value), fcp: Number($('fcp-rate').value), eligible: true };
+  return { origin: $('origin').value, destination: $('destination').value, internalRate: Number($('internal-rate').value), interstate: Number($('interstate-rate').value), fcp: Number($('fcp-rate').value), eligible: true,internalRateSource:$('internal-rate').dataset.source||'manual' };
 }
 function clearResult() {
   result = null; $('export-button').disabled = true;
   $('summary-origin').textContent = $('origin').value || '—'; $('summary-destination').textContent = $('destination').value || '—';
   $('summary-difal').textContent = money(0); $('summary-fcp').textContent = money(0);
   $('summary-total').textContent = money(0);
+  $('summary-grand-total').textContent='—';
   $('difal-percent').textContent = '—'; $('fcp-percent').textContent = `${$('fcp-rate').value || 0}%`;
   $('summary-caption').textContent = items.length ? 'Confira as alíquotas e calcule para ver o resultado.' : 'Tudo o que você precisa, em um só lugar.';
   $('step-review').classList.toggle('current', items.length > 0); $('step-result').classList.remove('current');
@@ -56,9 +67,11 @@ function renderItems() {
   });
 }
 function suggestRate() { $('interstate-rate').value = STATES.includes($('origin').value) && STATES.includes($('destination').value) ? interstateRate($('origin').value, $('destination').value, $('imported').checked) : ''; clearResult(); }
-for (const id of ['origin','destination','imported']) $(id).addEventListener('change', suggestRate);
+for (const id of ['origin','imported']) $(id).addEventListener('change', suggestRate);
+$('destination').addEventListener('change',()=>{suggestInternalRate();suggestRate();});
 for(const role of ['origin','destination'])$(role).addEventListener('change',()=>{$('route-status').textContent='Estados ajustados por você. A alíquota interestadual acompanha a rota selecionada.';});
 for (const id of ['internal-rate','interstate-rate','fcp-rate','eligible']) $(id).addEventListener('input', clearResult);
+$('internal-rate').addEventListener('input',()=>{$('internal-rate').dataset.source='manual';$('internal-rate-status').textContent='ICMS interno ajustado por você. Ao trocar o destino, o site volta à alíquota da tabela.';});
 function openItem(index = -1) {
   editing = index; $('item-form').reset(); $('item-error').textContent = '';
   $('item-dialog-title').textContent = index < 0 ? 'Adicionar item' : 'Editar item';
@@ -78,12 +91,12 @@ $('item-form').onsubmit = event => {
   } catch (error) { $('item-error').textContent = error.message; }
 };
 for (const button of document.querySelectorAll('.close-dialog')) button.onclick = () => button.closest('dialog').close();
-for (const id of ['guide-button','learn-button']) $(id).onclick = () => $('guide-dialog').showModal();
+$('learn-button').onclick = () => $('guide-dialog').showModal();
 function download(content, name, type) {
   const url = URL.createObjectURL(new Blob([content], { type })); const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 $('template-button').onclick = () => download('\uFEFFdescricao;ncm;quantidade;valor_unitario;frete;outras_despesas;desconto\nProduto de exemplo;94036000;2;150,00;20,00;0;0\n','modelo-orcamento-kush.csv','text/csv;charset=utf-8');
-for (const id of ['upload-button','sidebar-import']) $(id).onclick = () => $('file-input').click();
+$('upload-button').onclick = () => $('file-input').click();
 $('file-input').onchange = async event => { const file = event.target.files[0]; if (file) await importFile(file); event.target.value = ''; };
 for (const type of ['dragenter','dragover']) $('dropzone').addEventListener(type, event => { event.preventDefault(); $('dropzone').classList.add('dragover'); });
 for (const type of ['dragleave','drop']) $('dropzone').addEventListener(type, event => { event.preventDefault(); $('dropzone').classList.remove('dragover'); });
@@ -131,7 +144,7 @@ async function importFile(file) {
     calculate({items:parsed.items,origin:parsed.origin || 'SP',destination:parsed.destination || 'RJ',internalRate:18,interstate:12,fcp:0});
     if (items.length && !window.confirm('Substituir os itens atuais pelos itens deste documento?')) return;
     // Replace document settings too, so rates from a previous invoice cannot leak into a new import.
-    $('internal-rate').value = parsed.internalRate ?? ''; $('fcp-rate').value = parsed.fcp ?? 0;
+    $('fcp-rate').value = parsed.fcp ?? 0;
     $('eligible').checked = parsed.eligible ?? true; $('imported').checked = parsed.interstate === 4;
     applyDocumentRoute(parsed);
     suggestRate();
@@ -150,6 +163,7 @@ $('calculate-button').onclick = () => {
     if (!items.length) throw new Error('Importe um documento ou adicione pelo menos um item para calcular.');
     const config = settings(); const totals = calculate({ items, ...config }); result = { ...totals, ...config, date: new Date().toISOString(), sourceName };
     $('summary-base').textContent = money(result.base); $('summary-difal').textContent = money(result.difal); $('summary-fcp').textContent = money(result.povertyFund); $('summary-total').textContent = money(result.total);
+    $('summary-grand-total').textContent=money(round(result.base+result.total));
     $('difal-percent').textContent = `${config.origin === config.destination ? 0 : round(config.internalRate - config.interstate)}%`; $('fcp-percent').textContent = `${config.fcp}%`;
     $('summary-caption').textContent = `Calculado com ${items.length} ${items.length === 1 ? 'item' : 'itens'} · base única`;
     $('export-button').disabled = false; $('step-result').classList.add('current');
@@ -173,14 +187,15 @@ $('export-button').onclick = () => {
   // Spreadsheet formula injection prevention also applies to imported product names.
   const cell = value => { let text = String(value); if (/^[\s]*[=+@-]/.test(text)) text = "'" + text; return '"' + text.replaceAll('"','""') + '"'; };
   const lines = [['Kush — Simulação DIFAL por base única'],['Data',new Date(result.date).toLocaleString('pt-BR')],['Documento',result.sourceName],['Origem',result.origin,'Destino',result.destination],['ICMS interno (%)',result.internalRate,'ICMS interestadual (%)',result.interstate,'FCP (%)',result.fcp],[],['Descrição','NCM','Quantidade','Valor unitário','Frete','Outras despesas / IPI','Desconto','Base','DIFAL','FCP','Total']];
+  if(result.internalRateSource==='table')lines.splice(5,0,['Fonte do ICMS interno',ICMS_REFERENCE.source,'Atualização informada',ICMS_REFERENCE.sourceUpdatedAt,'Consulta',ICMS_REFERENCE.retrievedAt]);
   const num = value => value.toLocaleString('pt-BR',{maximumFractionDigits:8,useGrouping:false});
   for (const row of result.rows) lines.push([row.description,row.ncm,...['quantity','price','freight','other','discount','base','difal','povertyFund','total'].map(key=>num(row[key]))]);
-  lines.push([],['Base total',num(result.base)],['DIFAL total',num(result.difal)],['FCP total',num(result.povertyFund)],['Total estimado',num(result.total)],[],['Estimativa: confirme legislação, enquadramento, NCM e componentes da base antes de recolher. Não contempla ICMS-ST, benefícios fiscais ou base dupla.']);
+  lines.push([],['Base total',num(result.base)],['DIFAL total',num(result.difal)],['FCP total',num(result.povertyFund)],['Total a recolher estimado',num(result.total)],['Valor total com DIFAL e FCP',num(round(result.base+result.total))],[],['Estimativa: confirme legislação, enquadramento, NCM e componentes da base antes de recolher. Não contempla ICMS-ST, benefícios fiscais ou base dupla.']);
   download('\uFEFF' + lines.map(row => row.map(cell).join(';')).join('\r\n'),`difal-${result.origin}-${result.destination}-${result.date.slice(0,10)}.csv`,'text/csv;charset=utf-8');
 };
 $('new-button').onclick = () => {
   if (items.length && !window.confirm('Limpar os dados e iniciar um novo cálculo?')) return;
-  items=[]; sourceName='Inclusão manual'; $('origin').value=''; $('destination').value=''; $('route-status').textContent='Os estados serão preenchidos a partir dos endereços do documento. Você pode alterar a seleção.'; $('internal-rate').value=''; $('interstate-rate').value=''; $('fcp-rate').value=0; $('imported').checked=false; $('eligible').checked=true; $('file-info').hidden=true; message(''); renderItems();
+  items=[]; sourceName='Inclusão manual'; $('origin').value=''; $('destination').value=''; $('route-status').textContent='Os estados serão preenchidos a partir dos endereços do documento. Você pode alterar a seleção.'; suggestInternalRate(); $('interstate-rate').value=''; $('fcp-rate').value=0; $('imported').checked=false; $('eligible').checked=true; $('file-info').hidden=true; message(''); renderItems();
 };
 $('history-count').textContent = history.length;
 renderItems();
@@ -277,7 +292,7 @@ $('reader-import').onclick=()=>{
     if (reviewed.length>500) throw new Error('Limite de 500 itens por documento.');
     if (items.length && !window.confirm('Substituir os itens atuais pelos itens conferidos deste documento?')) return;
     items=reviewed; sourceName=pendingDocument.name+' (IA local conferida)';
-    $('internal-rate').value=''; $('fcp-rate').value=0; $('eligible').checked=false; $('imported').checked=false;
+    $('fcp-rate').value=0; $('eligible').checked=true; $('imported').checked=false;
     applyDocumentRoute(pendingDocument);
     suggestRate(); renderItems();
     $('file-name').textContent=pendingDocument.name; $('file-details').textContent=`${items.length} itens reconhecidos por IA · processamento local`; $('file-info').hidden=false;

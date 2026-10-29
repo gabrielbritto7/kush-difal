@@ -10,3 +10,7 @@ __pycache__/
 *.py[cod]
 .venv*/
 models/
+
+# The small verified browser model is a deploy asset, not a private model cache.
+!assets/models/
+!assets/models/**

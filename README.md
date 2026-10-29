@@ -1,75 +1,75 @@
 # Kush DIFAL
 
-Site de cálculo de DIFAL interestadual em português. Agora com modo **IA Docling** para reconhecer a estrutura de tabelas em PDFs e fotos, sem chave de API de IA paga. Esse modo precisa de um backend separado; XML/CSV e o modo local simples continuam no navegador.
+Calculadora de DIFAL com **reconhecimento automático por IA no navegador**. Basta selecionar o PDF ou a imagem: o site identifica as células da tabela, lê produtos/quantidades/preços e confere os totais. Hospedagem estática na **Vercel**, código e modelo no **GitHub**. Não precisa de servidor de IA, endereço de serviço, chave paga, Hugging Face ou API de inferência.
 
-## Desenvolvimento
+## Executar e publicar
 
-Node.js 24.5+ e npm. Dependências fixadas no `package-lock.json`.
+Node.js 24.5+ e npm:
 
 ```sh
 npm ci
 npm run build
 npm start
-npm test
-npm run check
 ```
 
-Para testar **site + IA juntos**, consulte [backend/README.md](backend/README.md), começando por `docker compose up --build`. Somente publicar na Vercel não instala a IA.
+O servidor estático usa a porta 3000 ou `PORT`. Na Vercel, importe o repositório com preset **Other**, build `npm run build` e saída `public`. Nenhuma variável de IA é necessária. `DOCUMENT_AI_URL` e `DIFAL_AI_KEY` não são usadas pelo site atual e podem ser removidas das configurações antigas.
 
-O servidor estático local usa a porta 3000 ou `PORT`. `npm run build` gera `public/`, contendo somente os arquivos públicos, PDF.js, Tesseract.js, WebAssembly, fontes e modelo OCR em português. O modo local não utiliza CDNs externas durante a leitura. A primeira utilização de OCR baixa aproximadamente alguns megabytes de ferramentas e modelo do próprio site. O desempenho depende do dispositivo.
+O build inclui o modelo SLANet-plus, ONNX Runtime Web, PDF.js, Tesseract.js, modelo de português e fontes locais. O modelo de tabelas ocupa aproximadamente 8 MB; o runtime WebAssembly e o OCR também são baixados do próprio site. A primeira leitura usa mais rede que as seguintes; o cache é do navegador. O processamento usa CPU/WebAssembly e Web Workers, sem exigir WebGPU. Navegadores antigos, dispositivos com pouca memória, fotos ruins e documentos extensos podem falhar.
 
-## Publicação na Vercel
+Para publicar `difal.kush-archives.com.br`, associe o domínio ao projeto e aplique o registro DNS exato fornecido pela Vercel. Preserve domínio raiz, email e nameservers. Um push no GitHub não prova que o deploy ou o domínio já estejam atualizados; confira o deployment e o HTTPS.
 
-A configuração `vercel.json` define o comando `npm run build` e o diretório `public`. Importe este repositório na Vercel usando o preset **Other**, sem servidor ou funções. Para o modo IA, publique também o backend e defina `DOCUMENT_AI_URL` com sua URL HTTPS (não é uma chave). Sem backend, a página mostra que a IA está desconectada; não simula uma análise. O token da Vercel, quando usado para automatizar o deploy, pertence apenas ao ambiente de administração e nunca ao site ou ao repositório.
+## Como funciona
 
-Após um deployment passar para Ready, associe `difal.kush-archives.com.br` ao projeto. Use exatamente o registro DNS indicado pela Vercel para esse domínio. Se o DNS estiver no Registro.br, crie o registro do subdomínio `difal` na zona existente; não troque os nameservers nem altere o domínio raiz ou registros de email. Se a zona já estiver na Vercel, configure pelo próprio provedor. Confirme a propagação, emissão do certificado e acesso HTTPS antes de considerar a publicação concluída. Não há URL de produção validada apenas por estes arquivos existirem.
+1. PDF.js extrai o texto e as posições de PDFs selecionáveis; PDFs digitalizados e fotos passam por OCR em português com caixas de palavras.
+2. O site localiza regiões candidatas da tabela, sem depender de espaçamento fixo no texto.
+3. **SLANet-plus**, uma rede neural de estrutura de tabelas, prevê células, linhas e colunas com ONNX Runtime Web. O modelo é executado de verdade no dispositivo, não substituído por resposta simulada.
+4. O texto é associado às células. O adaptador reconhece campos, títulos com erros comuns de OCR, descrições deslocadas e texto sobreposto à quantidade. Não gera preços nem produtos novos.
+5. Quantidade × preço é conferido com o total da linha. Pequenas diferenças de arredondamento preservam o total impresso, com aviso. Entrega/frete e desconto globais explicitamente identificados são rateados em centavos; não são adicionados novamente quando já aparecem nas linhas. Encargos não modelados causam divergência de total e exigem conferência.
+6. Quando um total de produtos ou de orçamento está explícito, ele precisa conferir com a soma reconhecida. Linhas rejeitadas ou divergências bloqueiam a importação automática. Os campos aparecem preenchidos; o usuário revisa e confirma, sem ter de redigitar os produtos.
 
-## Importação e conferência
+O reconhecimento não é universal. O modelo pode falhar em tabelas diferentes, múltiplas colunas de cabeçalho, texto ilegível, fotografias inclinadas ou valores ambíguos. Uma soma que confere não certifica todos os caracteres da descrição ou dados fiscais. Não inventamos NCM, UF de origem, alíquotas ou enquadramento quando ausentes. O resultado fiscal depende desses dados e da confirmação do usuário.
 
-- XML original de NF-e: produtos, UFs e componentes da base.
-- CSV de orçamento: use o modelo da interface.
-- IA Docling: serviço com modelos de layout e TableFormer, usando células estruturadas para mapear itens.
-- PDF com texto no modo local: PDF.js extrai texto e posições.
-- PDF digitalizado e fotos no modo local: Tesseract.js executa OCR em português no navegador.
-- Entrada manual: disponível para qualquer documento.
+**NFS-e de serviços é identificada separadamente.** O site mostra a descrição/valor quando legíveis e não importa a nota como mercadoria para este cálculo de DIFAL/ICMS. Isso não é uma consulta à SEFAZ, verificação de autenticidade ou parecer tributário.
 
-Até 5 MB por arquivo, PDFs de até 10 páginas, imagens de até 25 megapixels e 500 itens por leitura PDF/OCR. Documentos protegidos por senha não são suportados. A análise ocorre página por página; páginas com menos de 30 caracteres passam por OCR.
-
-O parser do modo local reconhece tabelas simples com descrição, quantidade e valor unitário, e opcionalmente NCM e total. Totais de linha, quando identificados, precisam conferir com quantidade × preço para aceitar a sugestão. O texto original e um CSV editável aparecem antes da importação, que exige confirmação. Tabelas complexas, DANFEs, texto quebrado e fotos ruins podem precisar de ajustes ou do XML original. OCR pode trocar dígitos; não determina NCM, alíquotas ou enquadramento. Frete, IPI, despesas e descontos globais não são distribuídos automaticamente. Inclua-os após a conferência.
-
-Após importar PDF/foto, UFs não identificadas ficam em branco, alíquotas internas são limpas e o enquadramento deve ser confirmado. O OCR não inicia um cálculo sem revisão.
+XML original de NF-e e CSV continuam com importação direta. O modelo neural é usado na leitura de PDF/foto. Limites: 5 MB, PDF até 10 páginas, imagens até 25 megapixels, até 500 produtos. O reconhecimento expira em cinco minutos e libera os workers.
 
 ## Privacidade
 
-XML, CSV e o modo local ficam no navegador. **No modo IA**, o documento é enviado somente após consentimento ao serviço Docling informado na tela, para inferência no próprio servidor. O código do backend deste projeto usa arquivos temporários e os exclui ao terminar; confirme que o host é confiável e mantenha logs/gateway sem captura de documentos. Não há chamadas de inferência para OpenAI ou outro provedor pago. O primeiro carregamento do servidor baixa os pesos públicos dos modelos, sem enviar o documento a esses repositórios.
+Documentos, páginas renderizadas e resultados permanecem no navegador. Não há endpoint de upload nem chamadas a serviços de IA externos no fluxo atual. O site somente baixa arquivos estáticos do seu próprio domínio. São persistidos apenas resumos de cálculos no localStorage; o histórico permite apagá-los. Os documentos usados nos testes enviados pelo usuário não fazem parte do repositório nem do deploy.
 
-Somente resumos de cálculos e a URL do serviço são salvos no navegador. O histórico permite apagar os resumos. Não coloque segredos na URL do backend. Não é necessária `DIFAL_AI_KEY`; remova a exigência antiga nas configurações se ainda estiver presente.
+## Verificações
 
-## Escopo tributário
+```sh
+npm test
+npm run check
+npm run test:browser
+```
 
-Simulação por **base única** para consumidor final não contribuinte. Base = produtos + frete + seguro + outras despesas + IPI − descontos. DIFAL = base × (interna − interestadual), com FCP separado e arredondamento por item. A alíquota interestadual é sugerida por UF ou marcada para importados sujeitos a 4%. Confirme ICMS interno, FCP, data, produto e legislação. XML com taxas diferentes deve ser separado por enquadramento.
+`npm test` verifica os cálculos, mapeamento das células, detecção de NFS-e, rateio, rejeição de divergências e hash do modelo. `test:browser` executa **inferência real** no Chromium com um PDF sintético e passa da seleção do arquivo ao cálculo, sem preencher os produtos manualmente. Requer Chromium instalado (`BROWSER_PATH` pode selecionar o executável). O script inicia um servidor de teste ou usa `TEST_BASE_URL`.
 
-Não cobre ICMS-ST, benefícios fiscais, reduções, base dupla, regimes especiais ou operações para contribuintes. Não emite GNRE, valida assinatura digital nem consulta autorização da SEFAZ. Não substitui validação fiscal.
+Para testar documentos privados sem copiá-los para o projeto:
 
-## Código aberto
+```sh
+npm run test:browser -- --budget /caminho/orcamento.pdf --expected-count 2 --expected-base 370 --photo /caminho/foto.jpg --scan /caminho/digitalizado.pdf --service /caminho/nfse.pdf
+```
 
-- [Docling](https://github.com/docling-project/docling), MIT (consulte as licenças dos modelos separadamente).
+Substitua os valores de exemplo pelos totais e quantidade de linhas do documento testado. Os valores esperados são parâmetros do teste e não regras do reconhecimento. Não comite documentos de clientes. Os testes executados nesta alteração incluíram o orçamento e a NFS-e fornecidos pelo usuário, mais cópias em JPEG e PDF digitalizado. No orçamento, as linhas e os totais foram reconhecidos sem edição de produtos; a NFS-e foi identificada como serviço. Esse resultado vale para esses casos e não é uma taxa de acerto geral.
+
+## Integridade e código aberto
+
+- [SLANet-plus / RapidTable](https://github.com/RapidAI/RapidTable), Apache 2.0. Modelo obtido do pacote oficial `rapid-table==0.3.0`, conferido com o checksum upstream, convertido para compatibilidade com o runtime Web e incluído no GitHub.
+- [ONNX Runtime Web](https://github.com/microsoft/onnxruntime), MIT.
 - [PDF.js](https://github.com/mozilla/pdf.js), Apache 2.0.
-- [Tesseract.js](https://github.com/naptha/tesseract.js), Apache 2.0, e Tesseract WebAssembly.
-- [Modelo de português](https://www.npmjs.com/package/@tesseract.js-data/por).
+- [Tesseract.js](https://github.com/naptha/tesseract.js) e modelo português, Apache 2.0.
 
-As dependências são obtidas pelo npm com integridade registrada no lockfile. O build inclui os avisos de licença disponíveis em `public/vendor/licenses`.
+A origem, hashes e licença do modelo estão em `assets/models`. `scripts/prepare-table-model.py` reproduz a conversão e compara as saídas numéricas com o modelo original. Os pesos aprendidos não são retreinados. O build e o worker verificam o hash do artefato convertido. Não há download de pesos externos durante o deploy; Python não é necessário na Vercel. Avisos de licença acompanham os assets.
 
-A implementação anterior com Poppler/Tesseract nativos foi preservada em `document-reader.mjs` apenas como alternativa local, sem endpoint público e sem uso pelo site publicado. Seus testes opcionais (`npm run test:native`) precisam de Poppler, Tesseract, Python/Pillow e fontes DejaVu. A página estática e os testes padrão não dependem dessas ferramentas.
+A identidade visual usa Fredoka/Quicksand locais, fundo branco, contornos pretos e botões arredondados dos projetos PDF/Bitmap do Kush Archives.
 
-## Identidade visual
+## Escopo fiscal
 
-O site segue a identidade dos projetos PDF (`ilovekush`) e Bitmap do Kush Archives: títulos Fredoka, texto Quicksand, fundo branco, contornos pretos e botões arredondados. Fontes são servidas localmente e suas licenças acompanham o build em `assets/licenses`. O favicon é o mesmo do projeto PDF do usuário. Os links do cabeçalho levam às ferramentas PDF, Bitmap e remoção de fundo.
+Simulação por **base única**, para consumidor final não contribuinte. Base = produtos + frete + seguro + despesas/IPI aplicáveis − descontos. DIFAL = base × (interna − interestadual); FCP separado, com arredondamento por item. Confira tributação vigente, data, NCM, UF, benefícios e incidência de despesas. Não cobre ICMS-ST, redução de base, base dupla ou regimes especiais; não emite GNRE nem valida autorização/assinatura da NF-e. A IA lê documentos e não decide a legislação aplicável.
 
-## Situação da integração Docling
+## Implementação antiga
 
-O frontend permite selecionar IA Docling, informar a URL, autorizar o envio, revisar texto/tabelas e importar itens conferidos. O backend possui API, teste do adaptador com classes reais do SDK, validações e arquivos de publicação Docker. Os testes da API simulam a inferência; a tentativa de inicializar modelos reais foi bloqueada por `403` no proxy ao acessar Hugging Face. Não há extração real com pesos validada nesta sessão. As instruções completas e os limites estão em [backend/README.md](backend/README.md).
-
-## Quando os produtos não forem identificados
-
-A leitura local é a opção padrão e não exige backend. Depois da extração, a revisão mostra campos de descrição, NCM opcional, quantidade, valor unitário, frete, despesas e desconto. Se nenhum item for reconhecido, um produto vazio aparece para preenchimento a partir do documento, sem precisar editar CSV. Após conferir e importar, a página leva aos estados e alíquotas necessários ao cálculo. O CSV permanece como opção avançada. Isso permite continuar manualmente; não transforma o OCR em uma IA nem garante reconhecimento automático de layouts desconhecidos.
+O backend experimental Docling, Docker e leitor nativo foram preservados apenas como referência histórica. **Não são usados pelo site nem necessários para publicar ou testar a IA atual.** O campo de conexão de serviço foi removido. Os testes `test:backend` e `test:native` são opcionais e exigem dependências Python/sistema; não fazem parte do fluxo da Vercel.

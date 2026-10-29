@@ -1,5 +1,4 @@
 import { readDocument, readerStatus } from './browser-reader.js';
-import { aiStatus, readWithAI, serviceURL } from './document-ai-client.js';
 import { itemsToCSV } from './document-parser.js';
 import { STATES, interstateRate, calculate, parseCSV, parseNumber, round } from './calculator.js';
 
@@ -7,8 +6,7 @@ const $ = id => document.getElementById(id);
 const money = value => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const names = { AC:'Acre', AL:'Alagoas', AP:'Amapá', AM:'Amazonas', BA:'Bahia', CE:'Ceará', DF:'Distrito Federal', ES:'Espírito Santo', GO:'Goiás', MA:'Maranhão', MT:'Mato Grosso', MS:'Mato Grosso do Sul', MG:'Minas Gerais', PA:'Pará', PB:'Paraíba', PR:'Paraná', PE:'Pernambuco', PI:'Piauí', RJ:'Rio de Janeiro', RN:'Rio Grande do Norte', RS:'Rio Grande do Sul', RO:'Rondônia', RR:'Roraima', SC:'Santa Catarina', SP:'São Paulo', SE:'Sergipe', TO:'Tocantins' };
 let items = [], result = null, editing = -1, sourceName = 'Inclusão manual';
-let readerAvailable=false, readerLoading=false, pendingDocument=null, readerVersion=0, aiConfigLoaded=false, readerCheckVersion=0, readerRows=[], readerCSVInvalid=false;
-try { $('reader-service').value=localStorage.getItem('kush-document-ai-url') || ''; } catch {}
+let readerAvailable=false, readerLoading=false, pendingDocument=null, readerVersion=0, readerRows=[], readerCSVInvalid=false;
 let history = [];
 try { const saved = JSON.parse(localStorage.getItem('kush-history') || '[]'); if (Array.isArray(saved)) history = saved.filter(x => x && STATES.includes(x.origin) && STATES.includes(x.destination) && Number.isFinite(x.total) && Number.isFinite(x.base) && Number.isFinite(x.count) && Number.isFinite(new Date(x.date).getTime())).slice(0, 20); } catch {}
 for (const id of ['origin','destination']) {
@@ -118,7 +116,7 @@ async function importFile(file) {
     const extension = file.name.split('.').pop().toLowerCase();
     if (['pdf','png','jpg','jpeg','webp'].includes(extension)) {
       const transfer=new DataTransfer(); transfer.items.add(file); $('reader-file').files=transfer.files;
-      clearPendingDocument(); await $('reader-button').onclick(); return;
+      clearPendingDocument(); await $('reader-button').onclick(); await $('reader-submit').onclick(); return;
     }
     if (!['xml','csv'].includes(extension)) throw new Error('Para PDF e imagens, use a opção “Ler PDF / foto”. Orçamentos XLSX devem ser exportados para CSV.');
     const text = await file.text(); const parsed = extension === 'xml' ? parseXML(text) : {items:parseCSV(text)};
@@ -182,50 +180,19 @@ $('new-button').onclick = () => {
 $('history-count').textContent = history.length;
 renderItems();
 
-function usesAI(){return $('reader-mode').value==='ai';}
-function updateConsent(){
-  const ai=usesAI();let destination='o serviço de IA configurado';
-  try {destination=new URL(serviceURL($('reader-service').value)).origin;}catch{}
-  $('reader-consent-label').textContent=ai ? `Autorizo enviar este documento para ${destination}, onde o Docling analisará as tabelas. Vou conferir o resultado antes de calcular.` : 'Quero processar este arquivo no meu navegador e conferir os itens reconhecidos. O documento não será enviado ao servidor.';
-  $('reader-privacy').textContent=ai ? 'No modo IA, o documento é enviado ao serviço escolhido. O backend deste projeto usa arquivos temporários e os exclui ao finalizar. Não envie documentos a endereços que você não reconhece.' : 'No modo local, o documento fica no seu dispositivo. As ferramentas são baixadas deste site e só resumos de cálculos são salvos no navegador.';
-}
-async function checkReader(){
-  readerAvailable=false;updateReaderButtons();updateConsent();const version=++readerCheckVersion;
-  $('reader-status').textContent=usesAI()?'Verificando o serviço de IA…':'Verificando o leitor local…';
-  try {
-    if(!aiConfigLoaded){
-      aiConfigLoaded=true;
-      try {const response=await fetch('/app-config.json');if(response.ok){const config=await response.json();if(!$('reader-service').value && config.documentAIUrl)$('reader-service').value=config.documentAIUrl;}}catch{}
-      updateConsent();
-    }
-    const ai=usesAI();const status=ai?await aiStatus($('reader-service').value):readerStatus();
-    if(version!==readerCheckVersion)return;
-    readerAvailable=status.enabled===true;
-    $('reader-status').textContent=ai ? (readerAvailable ? (status.ready?'IA Docling disponível. As tabelas serão analisadas no serviço informado.':'Serviço Docling conectado. Os modelos serão carregados na primeira leitura; o servidor precisa ter acesso aos pesos oficiais.') : 'O serviço respondeu, mas o Docling não está instalado. Confira a instalação do backend.') : (readerAvailable?'Leitor local disponível. Reconhece tabelas simples, sem enviar o arquivo.':'Seu navegador não oferece suporte ao leitor local. Use um navegador atualizado ou o serviço de IA.');
-  }catch(error){
-    if(version!==readerCheckVersion)return;
-    readerAvailable=false;
-    $('reader-status').textContent=usesAI()?'A IA ainda não está conectada. Abra “Conectar serviço de IA” e informe o endereço do backend Docling. Publicar apenas o frontend na Vercel não ativa a IA.':'Não foi possível ativar o leitor local.';
-  }
+$('reader-button').onclick=async()=>{
+  $('reader-dialog').showModal();$('reader-error').textContent='';
+  readerAvailable=readerStatus().enabled;
+  $('reader-status').textContent=readerAvailable?'IA no navegador pronta para carregar. Selecione um documento para reconhecer os produtos automaticamente.':'Este navegador não oferece suporte à IA local. Atualize-o ou use um navegador recente.';
   updateReaderButtons();
-}
-$('reader-button').onclick=async()=>{ $('reader-dialog').showModal();$('reader-error').textContent='';await checkReader(); };
-$('reader-mode').onchange=async()=>{clearPendingDocument();$('reader-consent').checked=false;await checkReader();};
-$('reader-service-connect').onclick=async()=>{
-  $('reader-error').textContent='';
-  try {const url=serviceURL($('reader-service').value);$('reader-service').value=url;try{localStorage.setItem('kush-document-ai-url',url);}catch{}clearPendingDocument();$('reader-consent').checked=false;await checkReader();}catch(error){$('reader-error').textContent=error.message;readerAvailable=false;updateReaderButtons();}
 };
-$('reader-service').oninput=()=>{readerCheckVersion++;clearPendingDocument();$('reader-consent').checked=false;readerAvailable=false;updateConsent();updateReaderButtons();};
-function updateReaderButtons() {
-  $('reader-submit').disabled=!readerAvailable || readerLoading || !$('reader-consent').checked || !$('reader-file').files.length;
-  $('reader-import').disabled=readerLoading || !pendingDocument || !$('reader-reviewed').checked;
+function updateReaderButtons(){
+  $('reader-submit').disabled=!readerAvailable||readerLoading||!$('reader-file').files.length;
+  $('reader-import').disabled=readerLoading||!pendingDocument||!pendingDocument.verification?.complete||pendingDocument.blocked||!$('reader-reviewed').checked;
   $('reader-file').disabled=readerLoading;
-  $('reader-consent').disabled=readerLoading;
-  $('reader-mode').disabled=readerLoading;$('reader-service').disabled=readerLoading;$('reader-service-connect').disabled=readerLoading;
 }
 function clearPendingDocument() { readerVersion++; pendingDocument=null; $('reader-review').hidden=true; $('reader-reviewed').checked=false; updateReaderButtons(); }
-$('reader-file').onchange=clearPendingDocument;
-$('reader-consent').onchange=updateReaderButtons;
+$('reader-file').onchange=async()=>{clearPendingDocument();if(readerAvailable)await $('reader-submit').onclick();};
 $('reader-reviewed').onchange=updateReaderButtons;
 function renderReaderRows(){
   $('reader-products').replaceChildren();
@@ -265,50 +232,70 @@ $('reader-csv').oninput=()=>{
   updateReaderButtons();
 };
 $('reader-submit').onclick=async()=>{
-  if (readerLoading || !readerAvailable || !$('reader-consent').checked) return;
+  if(readerLoading||!readerAvailable)return;
   const file=$('reader-file').files[0]; if (!file) return;
   $('reader-error').textContent=''; clearPendingDocument(); const version=readerVersion;
   try {
     const mime={'pdf':'application/pdf','png':'image/png','jpg':'image/jpeg','jpeg':'image/jpeg','webp':'image/webp'}[file.name.split('.').pop().toLowerCase()];
     if (!mime || file.size>5*1024*1024) throw new Error('Escolha PDF, PNG, JPEG ou WebP de até 5 MB.');
-    readerLoading=true; updateReaderButtons(); $('reader-submit').textContent='Lendo documento…'; $('reader-status').textContent=usesAI()?'Enviando o documento ao serviço de IA para analisar tabelas…':'Processando no seu navegador. Um PDF digitalizado pode levar alguns minutos.';
+    readerLoading=true; updateReaderButtons(); $('reader-submit').textContent='Lendo documento…'; $('reader-status').textContent='Carregando IA local. O documento permanece no seu dispositivo…';
     const progress=text=>{$('reader-status').textContent=text;};
-    const parsed=usesAI()?await readWithAI(file,$('reader-service').value,progress):await readDocument(file,progress);
+    const parsed=await readDocument(file,progress);
     if (version!==readerVersion) return;
     if (!Array.isArray(parsed.items) || typeof parsed.text!=='string') throw new Error('O leitor não retornou um resultado válido.');
     calculate({items:parsed.items,origin:'SP',destination:'RJ',internalRate:18,interstate:12,fcp:0});
     pendingDocument={...parsed,name:file.name}; $('reader-review').hidden=false; $('reader-reviewed').checked=false;
-    $('reader-result').textContent=`${parsed.items.length} itens sugeridos · ${parsed.method==='docling'?`IA Docling · ${parsed.tableCount} tabelas`:parsed.method==='pdf-text'?'leitura direta de PDF':'reconhecimento OCR'}`;
+    $('reader-result').textContent=parsed.blocked?'NFS-e de serviços identificada':`${parsed.items.length} produtos reconhecidos · IA no navegador`;
+    renderRecognitionSummary(parsed);
     $('reader-text').textContent=parsed.text;
-    $('reader-tables').textContent=parsed.method==='docling'?JSON.stringify(parsed.tables || [],null,2):'';
-    $('reader-table-details').hidden=parsed.method!=='docling';
+    $('reader-tables').textContent=JSON.stringify(parsed.tables||[],null,2);
+    $('reader-table-details').hidden=!parsed.tables?.length;
     $('reader-warnings').textContent=(parsed.warnings || []).join(' ');
     $('reader-csv').value=itemsToCSV(parsed.items);
-    readerRows=parsed.items.length?parsed.items.map(item=>({...item})):[{description:'',ncm:'',quantity:'',price:'',freight:0,other:0,discount:0}];readerCSVInvalid=false;renderReaderRows();
-    $('reader-products-help').textContent=parsed.items.length?'Confira os valores reconhecidos. Corrija os campos ou acrescente produtos faltantes antes de continuar.':'O texto foi lido, mas os produtos não foram identificados. Preencha os campos abaixo usando o documento como referência; você poderá prosseguir sem editar CSV.';
+    readerRows=parsed.items.map(item=>({...item}));readerCSVInvalid=false;renderReaderRows();renderAutomaticProducts();
+    $('reader-products-section').hidden=!!parsed.blocked;
+    $('reader-products-help').textContent=parsed.verification?.complete?'Produtos preenchidos automaticamente. Confira os itens e os totais; não é necessário digitar as linhas.':'A identificação ficou incompleta ou os totais não conferem. Tente uma foto mais nítida, o PDF original ou o XML da NF-e. O site não continuará com valores parciais.';
     if(!parsed.items.length)$('reader-text').closest('details').open=true;
-    $('reader-status').textContent=parsed.items.length?'Leitura concluída. Confira os produtos e continue para os dados da operação.':'Texto extraído. Complete os produtos abaixo para continuar com o cálculo.';
+    $('reader-status').textContent=parsed.blocked?'Documento de serviço: não será importado no cálculo de DIFAL sobre mercadorias.':parsed.verification?.complete?'Reconhecimento concluído. Confira o resumo e continue para os dados da operação.':'Não foi possível concluir o reconhecimento com segurança. Nenhum produto do cálculo atual foi substituído.';
   } catch(error) { $('reader-error').textContent=error.name==='TimeoutError' ? 'Tempo de leitura excedido. Divida o documento ou use XML/CSV.' : error.message; $('reader-status').textContent='A leitura não foi concluída. Os itens do cálculo atual foram preservados.'; }
-  finally { readerLoading=false; $('reader-submit').textContent='Extrair texto e itens'; updateReaderButtons(); }
+  finally { readerLoading=false; $('reader-submit').textContent='Reconhecer novamente'; updateReaderButtons(); }
 };
 $('reader-import').onclick=()=>{
-  if (!pendingDocument || !$('reader-reviewed').checked || readerLoading) return;
+  if(!pendingDocument||!pendingDocument.verification?.complete||pendingDocument.blocked||!$('reader-reviewed').checked||readerLoading)return;
   try {
     if(readerCSVInvalid)throw new Error('O CSV avançado contém erros. Corrija-o ou preencha os campos dos produtos.');
     for(const input of $('reader-products').querySelectorAll('input'))if(!input.reportValidity())return;
     const reviewed=reviewedReaderItems();
     calculate({items:reviewed,origin:'SP',destination:'RJ',internalRate:18,interstate:12,fcp:0});
+    const expected=pendingDocument.verification.declaredTotal;
+    if(expected!==null&&expected!==undefined&&Math.abs(calculate({items:reviewed,origin:'SP',destination:'RJ',internalRate:18,interstate:12,fcp:0}).base-expected)>.021)throw new Error('Os valores revisados não conferem com o total do documento. Confira as alterações antes de importar.');
     if (reviewed.length>500) throw new Error('Limite de 500 itens por documento.');
     if (items.length && !window.confirm('Substituir os itens atuais pelos itens conferidos deste documento?')) return;
-    items=reviewed; sourceName=pendingDocument.name+(pendingDocument.method==='docling'?' (IA Docling conferida)':' (leitura no navegador conferida)');
+    items=reviewed; sourceName=pendingDocument.name+' (IA local conferida)';
     $('internal-rate').value=''; $('fcp-rate').value=0; $('eligible').checked=false; $('imported').checked=false;
     $('origin').value=STATES.includes(pendingDocument.origin)?pendingDocument.origin:'';
     $('destination').value=STATES.includes(pendingDocument.destination)?pendingDocument.destination:'';
     suggestRate(); renderItems();
-    $('file-name').textContent=pendingDocument.name; $('file-details').textContent=`${items.length} itens conferidos · ${pendingDocument.method==='docling'?'IA Docling':'leitura no navegador'}`; $('file-info').hidden=false;
+    $('file-name').textContent=pendingDocument.name; $('file-details').textContent=`${items.length} itens reconhecidos por IA · processamento local`; $('file-info').hidden=false;
     message('Produtos importados. Agora selecione origem e destino, informe o ICMS interno e confirme se a operação é para consumidor final não contribuinte. Depois clique em Calcular DIFAL.');
     $('origin').focus();
-    $('reader-dialog').close(); $('reader-file').value=''; $('reader-consent').checked=false; clearPendingDocument();
+    $('reader-dialog').close(); $('reader-file').value=''; clearPendingDocument();
     $('origin').closest('.operation-card').scrollIntoView({behavior:'smooth',block:'center'});
   } catch(error) { $('reader-error').textContent=error.message; }
 };
+
+function renderRecognitionSummary(parsed){
+  $('reader-summary').replaceChildren();
+  const add=(label,value)=>{const line=document.createElement('div'),term=document.createElement('span'),amount=document.createElement('strong');term.textContent=label;amount.textContent=value;line.append(term,amount);$('reader-summary').append(line);};
+  if(parsed.blocked){if(Number.isFinite(parsed.service?.amount))add('Valor do serviço',money(parsed.service.amount));add('Tipo do documento','NFS-e · ISSQN');return;}
+  const v=parsed.verification||{};
+  add('Produtos reconhecidos',String(parsed.items.length));
+  if(Number.isFinite(v.products))add('Total dos produtos',money(v.products));
+  if(v.delivery)add('Entrega / frete identificado',money(v.delivery));
+  if(Number.isFinite(v.base))add('Total da base reconhecida',money(v.base));
+  add('Conferência',v.complete?(v.declaredTotal!==null?'Total confere com o documento':'Linhas conferidas; sem total geral declarado'):'Leitura incompleta — não importar');
+}
+function renderAutomaticProducts(){
+  $('reader-auto-body').replaceChildren();
+  readerRows.forEach((item,index)=>{const row=document.createElement('tr');for(const value of [String(index+1),item.description,String(item.quantity),money(Number(item.quantity)*Number(item.price))]){const cell=document.createElement('td');cell.textContent=value;row.append(cell);}$('reader-auto-body').append(row);});
+}

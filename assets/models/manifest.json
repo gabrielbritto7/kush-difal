@@ -1,0 +1,12 @@
+{
+  "name": "SLANet-plus",
+  "purpose": "Reconhecimento de estrutura de tabelas, sem geração de valores",
+  "file": "table.onnx",
+  "sha256": "f1e8ae984d531e447bf2be66bf25ca318a12250ff06f88de9155bdcaaa95e117",
+  "source": "https://pypi.org/project/rapid-table/0.3.0/",
+  "upstream": "https://github.com/RapidAI/RapidTable",
+  "upstream_checksum": "https://github.com/RapidAI/RapidTable/blob/main/rapid_table/default_models.yaml",
+  "license": "Apache-2.0",
+  "source_sha256": "d57a942af6a2f57d6a4a0372573c696a2379bf5857c45e2ac69993f3b334514b",
+  "conversion": "Re-serialized with ONNX Runtime 1.31.1, optimizations disabled, to reconcile inconsistent exported shape metadata. Learned weights are not retrained."
+}

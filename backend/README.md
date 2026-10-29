@@ -1,3 +1,5 @@
+> **Legado:** este backend Docling não é usado pelo site atual. A IA de tabelas agora roda no navegador, com modelo incluído no GitHub/Vercel. Não configure endereço de serviço nem `DOCUMENT_AI_URL` para a versão atual. Consulte o README da raiz. As instruções abaixo documentam apenas o experimento anterior.
+
 # Testar a leitura com IA Docling
 
 O frontend e este backend já estão integrados, mas **publicar o frontend sozinho na Vercel não instala nem executa o Docling**. A IA precisa de um servidor Python/CPU ou de um host que aceite o Dockerfile. Não há chave de API paga. O modelo/código são abertos; custos de hospedagem dependem da sua infraestrutura. Consulte também as licenças individuais dos modelos.

@@ -6,11 +6,12 @@
   "scripts": {
     "dev": "node --use-env-proxy server.mjs",
     "start": "node --use-env-proxy server.mjs",
-    "test": "node tests/calculator.test.js && node tests/parsing.test.js && node tests/document-ai-client.test.js",
-    "check": "node --check app.js && node --check calculator.js && node --check server.mjs && node --check document-reader.mjs && node --check document-parser.js && node --check browser-reader.js && node --check scripts/build.mjs && node --check document-ai-client.js",
+    "test": "node tests/calculator.test.js && node tests/parsing.test.js && node tests/table-model.test.js && node tests/recognized-document.test.js",
+    "check": "node --check app.js && node --check browser-reader.js && node --check browser-table-ai.js && node --check table-model.js && node --check table-ai.worker.js && node --check recognized-document.js && node --check scripts/build.mjs && node --check scripts/smoke-browser.mjs",
     "build": "node scripts/build.mjs",
     "test:native": "node tests/documents.test.js",
-    "test:backend": "python3 -m unittest discover -s backend/tests -v"
+    "test:backend": "python3 -m unittest discover -s backend/tests -v",
+    "test:browser": "node scripts/smoke-browser.mjs"
   },
   "engines": {
     "node": ">=24.5.0"
@@ -19,7 +20,11 @@
     "@fontsource/fredoka": "5.3.0",
     "@fontsource/quicksand": "5.3.0",
     "@tesseract.js-data/por": "1.0.0",
+    "onnxruntime-web": "1.31.1",
     "pdfjs-dist": "6.4.299",
     "tesseract.js": "7.0.0"
+  },
+  "devDependencies": {
+    "playwright-core": "1.62.1"
   }
 }

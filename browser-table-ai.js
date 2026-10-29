@@ -14,8 +14,8 @@ export class BrowserTableAI {
     const id=++this.sequence;
     return new Promise((resolve,reject)=>{this.requests.set(id,{resolve,reject});this.worker.postMessage({id,input,width,height},[input.buffer]);});
   }
-  async analyze(canvas,words,onProgress=()=>{}){
-    let regions=findTableRegions(words,canvas.width,canvas.height);
+  async analyze(canvas,words,onProgress=()=>{},options={}){
+    let regions=findTableRegions(words,canvas.width,canvas.height,options);
     if(!regions.length)regions=[{x0:0,y0:0,x1:canvas.width,y1:canvas.height}];
     const tables=[];
     for(const [index,region]of regions.entries()){

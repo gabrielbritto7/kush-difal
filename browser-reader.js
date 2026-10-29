@@ -1,6 +1,7 @@
 import { BrowserTableAI } from './browser-table-ai.js';
 import { wordsToLines } from './table-model.js';
 import { recognizeDocument,documentKind } from './recognized-document.js';
+import { readRuledInvoiceTables,readInvoiceAmounts } from './invoice-layout.js';
 
 export function readerStatus(){
   return {enabled:typeof Worker!=='undefined' && typeof WebAssembly!=='undefined' && !!globalThis.crypto?.subtle,language:'por',engine:'SLANet-plus / ONNX no navegador'};
@@ -10,6 +11,8 @@ function pdfWords(content,viewport,pdfjs){
   for(const item of content.items){
     if(typeof item.str!=='string'||!item.str.trim())continue;
     const transform=pdfjs.Util.transform(viewport.transform,item.transform),size=Math.hypot(transform[2],transform[3]);
+    // Diagonal watermarks are not table cells; their large bounds can merge unrelated text lines.
+    if(Math.abs(transform[1])>Math.abs(transform[0])*.2)continue;
     measure.font=`${size}px ${content.styles[item.fontName]?.fontFamily||'Arial'}`;
     const total=measure.measureText(item.str).width||1,width=item.width*viewport.scale;
     for(const match of item.str.matchAll(/\S+/g)){
@@ -49,10 +52,22 @@ export async function readDocument(file,onProgress=()=>{}){
     return tsvWords(result.data.tsv);
   };
   try{
-    const tables=[],texts=[];let pages=1,textSource='pdf';
+    const tables=[],texts=[],metadata={conflicts:[]};let pages=1,textSource='pdf',usedLayout=false;
     const processPage=async(canvas,words)=>{
-      check();const text=wordsToLines(words).map(line=>line.text).join('\n');texts.push(text);
-      if(documentKind(text)!=='service_invoice')tables.push(...await ai.analyze(canvas,words,onProgress));
+      check();const text=wordsToLines(words).map(line=>line.text).join('\n'),kind=documentKind(text);
+      if(kind==='service_invoice')return {text,tables:[],fields:{},items:0,service:true};
+      const learned=await ai.analyze(canvas,words,onProgress,{invoice:kind==='goods_invoice'});
+      const layout=kind==='goods_invoice'?readRuledInvoiceTables(canvas,words):[];
+      const neuralResult=recognizeDocument(learned,text),layoutResult=layout.length?recognizeDocument(layout,text):null;
+      const useLayout=layoutResult&&layoutResult.items.length>0&&(layoutResult.items.length>neuralResult.items.length||(layoutResult.items.length===neuralResult.items.length&&layoutResult.verification.rejections.length<=neuralResult.verification.rejections.length));
+      return {text,tables:useLayout?layout:learned,fields:kind==='goods_invoice'?readInvoiceAmounts(words):{},items:(useLayout?layoutResult:neuralResult).items.length,layout:!!useLayout};
+    };
+    const collect=record=>{
+      texts.push(record.text);tables.push(...record.tables);usedLayout||=record.layout;
+      for(const [key,value]of Object.entries(record.fields)){
+        if(metadata[key]!==undefined&&Math.abs(metadata[key]-value)>.021)metadata.conflicts.push(key);
+        else metadata[key]=value;
+      }
     };
     if(extension==='pdf'){
       const pdfjs=await import('/vendor/pdf.min.mjs');check();pdfjs.GlobalWorkerOptions.workerSrc='/vendor/pdf.worker.min.mjs';
@@ -65,9 +80,15 @@ export async function readDocument(file,onProgress=()=>{}){
         const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
         try{
           await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-          let words=pdfWords(await page.getTextContent(),viewport,pdfjs);
-          if(words.length<15){words=await recognize(canvas);textSource='ocr';}
-          await processPage(canvas,words);
+          let words=pdfWords(await page.getTextContent(),viewport,pdfjs),usedOCR=words.length<15;
+          if(usedOCR){words=await recognize(canvas);textSource='ocr';}
+          let record=await processPage(canvas,words);
+          if(!usedOCR&&!record.items&&!record.service){
+            onProgress(`Rechecando a página ${number} com OCR em português…`);
+            const second=await processPage(canvas,await recognize(canvas));
+            if(second.items>record.items||second.service){record=second;textSource='ocr';}
+          }
+          collect(record);
         }finally{canvas.width=canvas.height=0;page.cleanup();}
       }
     }else{
@@ -75,11 +96,11 @@ export async function readDocument(file,onProgress=()=>{}){
       if(bitmap.width*bitmap.height>25000000)throw new Error('A imagem excede 25 megapixels. Reduza o tamanho antes de importar.');
       const scale=Math.min(2,Math.max(1,1600/bitmap.width),3000/Math.max(bitmap.width,bitmap.height));
       const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
-      try{canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);await processPage(canvas,await recognize(canvas));textSource='ocr';}finally{canvas.width=canvas.height=0;}
+      try{canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);collect(await processPage(canvas,await recognize(canvas)));textSource='ocr';}finally{canvas.width=canvas.height=0;}
     }
     const text=texts.join('\n');if(!text.trim())throw new Error('Não há texto legível. Envie uma foto mais nítida ou o XML original.');
-    const result=recognizeDocument(tables,text);
-    return {...result,method:result.blocked?'service-detected':'browser-ai',textSource,pages,language:'por',tableCount:tables.length};
+    const result=recognizeDocument(tables,text,metadata);
+    return {...result,method:result.blocked?'service-detected':'browser-ai',textSource,pages,language:'por',tableCount:tables.length,usedLayout};
   }catch(error){
     if(expired)throw new Error('A leitura excedeu cinco minutos. Divida o documento ou use o XML original.');
     if(/password|destroyed|invalid pdf/i.test(error.message))throw new Error('PDF inválido ou protegido por senha. Use o arquivo original sem senha.');

@@ -66,13 +66,32 @@ export function wordsToLines(words) {
   return lines.sort((a,b)=>a.center-b.center).map(line=>({...line,words:line.words.sort((a,b)=>a.x0-b.x0),text:line.words.sort((a,b)=>a.x0-b.x0).map(w=>w.text).join(' ')}));
 }
 
-export function findTableRegions(words,width,height) {
+export function findTableRegions(words,width,height,{invoice=false}={}) {
   const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   const lines=wordsToLines(words),regions=[];
+  if(invoice){
+    for(let i=0;i<lines.length;i++){
+      const text=normalize(lines[i].text),nearby=normalize(lines.slice(Math.max(0,i-1),i+2).map(line=>line.text).join(' '));
+      if(!/descri|discrim/.test(text)||!/(?:qtd|qtde|quant|quantity)/.test(nearby)||!/unit/.test(nearby))continue;
+      let first=i,lastHeader=i;
+      if(i>0&&!/dados.*produtos/.test(normalize(lines[i-1].text))&&/valor|aliq|icms|unit/.test(normalize(lines[i-1].text))&&!/\d[,\.]\d{2}/.test(lines[i-1].text))first=i-1;
+      if(lines[i+1]&&/unit|total|icms|ipi/.test(normalize(lines[i+1].text))&&!/\d[,\.]\d{2}/.test(lines[i+1].text))lastHeader=i+1;
+      let last=lastHeader,firstData=null;
+      for(let j=lastHeader+1;j<lines.length;j++){
+        if(/dados adicionais|informacoes complementares|reservado ao fisco|calculo do issqn|impresso em|gerado em|continuacao.*informacoes/.test(normalize(lines[j].text)))break;
+        last=j;if(!firstData&&(lines[j].text.match(/\d[\d.]*[,\.]\d{2,6}\b/g)||[]).length>=2)firstData=lines[j];
+      }
+      if(!firstData)continue;
+      const selected=lines.slice(first,last+1).flatMap(line=>line.words),padding=Math.max(6,lines[i].height);
+      regions.push({x0:Math.max(0,Math.min(...selected.map(word=>word.x0))-padding),y0:Math.max(0,lines[first].y0-padding),x1:Math.min(width,Math.max(...selected.map(word=>word.x1))+padding),y1:Math.min(height,lines[last].y1+padding),headerY0:lines[first].y0,headerY1:lines[lastHeader].y1,firstDataY1:firstData.y1});
+      i=last;
+    }
+    return regions;
+  }
   for(let i=0;i<lines.length;i++){
     const header=normalize(lines[i].text);
     const quantity=/\b(qtde|qtd|quantidade|quant|quantity)\b/.test(header);
-    const productHeading=/descri|produto|discrim|material/.test(header);
+    const productHeading=/descri|discrim|material/.test(header);
     if((!quantity && !(productHeading&&/total/.test(header))) || !/unit|preco|price|valor|vlr/.test(header))continue;
     let bottom=lines[i].y1,last=i,rows=0;const selected=[...lines[i].words];
     for(let j=i+1;j<Math.min(lines.length,i+150);j++){

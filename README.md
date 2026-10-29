@@ -20,12 +20,16 @@ Para publicar `difal.kush-archives.com.br`, associe o domínio ao projeto e apli
 
 ## Como funciona
 
-1. PDF.js extrai o texto e as posições de PDFs selecionáveis; PDFs digitalizados e fotos passam por OCR em português com caixas de palavras.
-2. O site localiza regiões candidatas da tabela, sem depender de espaçamento fixo no texto.
+1. PDF.js extrai o texto e as posições de PDFs selecionáveis; PDFs digitalizados e fotos passam por OCR em português com caixas de palavras. Se um PDF tiver uma camada de texto que não produz itens, o leitor tenta OCR automaticamente. Marcas d'água diagonais não entram nas linhas de texto dos produtos.
+2. O site localiza regiões candidatas da tabela, sem depender de espaçamento fixo no texto. Cabeçalhos de DANFE em mais de uma linha e descrições quebradas não encerram a tabela; todas as páginas são processadas.
 3. **SLANet-plus**, uma rede neural de estrutura de tabelas, prevê células, linhas e colunas com ONNX Runtime Web. O modelo é executado de verdade no dispositivo, não substituído por resposta simulada.
-4. O texto é associado às células. O adaptador reconhece campos, títulos com erros comuns de OCR, descrições deslocadas e texto sobreposto à quantidade. Não gera preços nem produtos novos.
+4. O texto é associado às células. Em notas com grade, as posições do texto e as linhas da própria página oferecem uma segunda leitura estruturada, conferida com quantidade, preço e totais. Ela corrige células que a rede tenha fundido sem depender de nome de fornecedor, número da nota ou valores específicos. O adaptador reconhece títulos com erros comuns de OCR, quantidade com unidade, NCM explícito na descrição, descrições deslocadas e texto sobreposto à quantidade. Não gera preços nem produtos novos. Artefatos de borda de OCR são removidos dos números sem trocar letras por dígitos.
 5. Quantidade × preço é conferido com o total da linha. Pequenas diferenças de arredondamento preservam o total impresso, com aviso. Entrega/frete e desconto globais explicitamente identificados são rateados em centavos; não são adicionados novamente quando já aparecem nas linhas. Encargos não modelados causam divergência de total e exigem conferência.
 6. Quando um total de produtos ou de orçamento está explícito, ele precisa conferir com a soma reconhecida. Linhas rejeitadas ou divergências bloqueiam a importação automática. Os campos aparecem preenchidos; o usuário revisa e confirma, sem ter de redigitar os produtos.
+
+Em DANFE, valores globais são lidos abaixo de seus rótulos, dentro das respectivas colunas, inclusive abreviações como “V. TOTAL PRODUTOS” e “V. TOTAL DA NOTA”. Frete, seguro, outras despesas, IPI e descontos são conciliados sem duplicar valores já presentes nos itens. O total bruto do produto continua separado desses componentes. Totais conflitantes entre páginas bloqueiam a importação.
+
+Uma NF pode ter itens com alíquotas interestaduais diferentes. Quando a rota é interestadual e a tabela informa explicitamente ICMS de 4%, 7% ou 12%, esses valores são preservados por item, inclusive em XML e CSV avançado. O uso das alíquotas da nota começa ativado para a rota original; a prévia mostra os valores por produto, o resumo indica “por item” e a exportação registra a taxa aplicada em cada linha. Mudar a rota, desativar a opção ou marcar a regra geral de importados passa a usar a taxa geral correspondente. Alíquotas internas por NCM e regras fiscais especiais continuam fora do escopo automático.
 
 O reconhecimento não é universal. O modelo pode falhar em tabelas diferentes, múltiplas colunas de cabeçalho, texto ilegível, fotografias inclinadas ou valores ambíguos. Uma soma que confere não certifica todos os caracteres da descrição ou dados fiscais. Não inventamos NCM, UF de origem ou enquadramento quando ausentes. O ICMS interno padrão vem da tabela de referência descrita abaixo; não é um número gerado pela IA.
 
@@ -53,9 +57,12 @@ Documentos, páginas renderizadas e resultados permanecem no navegador. Não há
 npm test
 npm run check
 npm run test:browser
+npm run test:invoices
 ```
 
 `npm test` verifica os cálculos, mapeamento das células, detecção de NFS-e, rateio, rejeição de divergências e hash do modelo. `test:browser` executa **inferência real** no Chromium com um PDF sintético e passa da seleção do arquivo ao cálculo, sem preencher os produtos manualmente. Requer Chromium instalado (`BROWSER_PATH` pode selecionar o executável). O script inicia um servidor de teste ou usa `TEST_BASE_URL`.
+
+`test:invoices` gera DANFEs fictícios de duas páginas, com cabeçalho dividido, descrições em várias linhas e taxas mistas de 4% e 12%. Confere leitura, NCMs, seleção automática de UFs e ICMS, cálculo por item, alteração de rota, exportação e bloqueio de uma nota inconsistente. Executa o modelo real; não usa respostas simuladas nem documentos de clientes no repositório.
 
 Para testar documentos privados sem copiá-los para o projeto:
 
@@ -64,6 +71,8 @@ npm run test:browser -- --budget /caminho/orcamento.pdf --expected-count 2 --exp
 ```
 
 Substitua os valores de exemplo pelos totais e quantidade de linhas do documento testado. Os valores esperados são parâmetros do teste e não regras do reconhecimento. Não comite documentos de clientes. Os testes executados nesta alteração incluíram o orçamento e a NFS-e fornecidos pelo usuário, mais cópias em JPEG e PDF digitalizado. No orçamento, as linhas e os totais foram reconhecidos sem edição de produtos; a NFS-e foi identificada como serviço. Esse resultado vale para esses casos e não é uma taxa de acerto geral.
+
+Para uma NF privada, `npm run test:invoices -- --pdf /caminho/nota.pdf --expected-count 2 --expected-base 220 --expected-origin SP --expected-destination PR --expected-rates 4,12 --expected-difal 25.3` testa também as alíquotas por item. Os parâmetros acima são fictícios. A correção foi verificada com uma DANFE multipágina enviada pelo usuário, outros layouts públicos do [BrazilFiscalReport](https://github.com/Engenere/BrazilFiscalReport), documentos fictícios e uma versão digitalizada com OCR. Os exemplos públicos com totais inconsistentes foram corretamente bloqueados. Isso amplia a cobertura de layouts, sem garantir leitura de todo arquivo, foto ilegível ou documento fiscal de outro tipo.
 
 ## Integridade e código aberto
 

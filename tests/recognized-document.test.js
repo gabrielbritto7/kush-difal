@@ -39,3 +39,18 @@ test('global discounts are allocated once and do not invent classification or or
   const result=recognizeDocument([table],text.replace('Desconto: 0,00','Desconto: 2,00').replace('Orçamento: 32,00','Orçamento: 30,00'));
   assert.equal(result.verification.base,30);assert.equal(result.verification.complete,true);assert.equal(result.items.every(item=>item.ncm===''),true);assert.equal(result.origin,null);
 });
+test('invoice row totals are gross products; IPI, freight, insurance and discount are applied once',()=>{
+  const table={rows:[['Descrição','NCM','QTD / UN','VLR UNIT','VLR TOTAL','VALOR IPI','VALOR DESC','ALÍQ ICMS'],['Peça Alfa','12345678','1,0000 UN','100,0000','100,00','10,00','5,00','4,00']]};
+  const result=recognizeDocument([table],'DANFE\nOrigem: SP\nDestino: PR',{declaredProducts:100,declaredTotal:122,delivery:15,insurance:2,ipi:10,discount:5,other:0});
+  assert.equal(result.verification.complete,true);assert.equal(result.verification.base,122);assert.equal(result.items[0].price,100);assert.equal(result.items[0].other,12);assert.equal(result.items[0].interstateRate,4);
+  const incomplete=recognizeDocument([table],'DANFE\nOrigem: SP\nDestino: PR',{declaredProducts:200,declaredTotal:222});assert.equal(incomplete.verification.complete,false);
+});
+test('explicit NCM tags can be read from newer invoice descriptions without guessing a classification',()=>{
+  const result=recognizeDocument([{rows:[['Descrição','QTD / UN','VLR UNIT','VLR TOTAL'],['Peça Exemplo [NCM 12345678]','2 UN','50,00','100,00']]}],'DANFE',{declaredProducts:100,declaredTotal:100});
+  assert.equal(result.items[0].ncm,'12345678');assert.equal(result.verification.complete,true);
+});
+test('OCR table-border glyphs are removed without repairing or inventing digits',()=>{
+  const table={rows:[['Descrição','Qtd','Valor Unit','Total'],['Componente Exemplo','[2,00','50,00|','100,00']]};
+  assert.equal(recognizeDocument([table],'DANFE',{declaredProducts:100,declaredTotal:100}).verification.complete,true);
+  table.rows[1][1]='[Z,00';assert.equal(recognizeDocument([table],'DANFE',{declaredProducts:100,declaredTotal:100}).verification.complete,false);
+});

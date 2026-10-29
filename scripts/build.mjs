@@ -10,7 +10,7 @@ if(model.length!==TABLE_MODEL.size||createHash('sha256').update(model).digest('h
 await rm(output,{recursive:true,force:true});
 await mkdir(join(output,'vendor/core'),{recursive:true});
 await mkdir(join(output,'vendor/lang'),{recursive:true});
-for(const file of ['index.html','styles.css','app.js','calculator.js','icms-rates.js','document-parser.js','document-route.js','browser-reader.js','table-model.js','table-ai.worker.js','browser-table-ai.js','recognized-document.js']) await copyFile(join(root,file),join(output,file));
+for(const file of ['index.html','styles.css','app.js','calculator.js','icms-rates.js','document-parser.js','document-route.js','browser-reader.js','table-model.js','table-ai.worker.js','browser-table-ai.js','recognized-document.js','invoice-layout.js']) await copyFile(join(root,file),join(output,file));
 const modules=join(root,'node_modules');
 await mkdir(join(output,'vendor/ort'),{recursive:true});
 for(const file of ['ort.wasm.min.mjs','ort-wasm-simd-threaded.mjs','ort-wasm-simd-threaded.wasm']) await copyFile(join(modules,'onnxruntime-web/dist',file),join(output,'vendor/ort',file));

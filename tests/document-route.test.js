@@ -16,6 +16,8 @@ test('assigns budget supplier and client addresses to the correct roles',()=>{
 test('reads DANFE party sections and a separately printed UF column',()=>{
   const route=extractDocumentRoute('IDENTIFICAÇÃO DO EMITENTE\nEmpresa Exemplo\nAv. Exemplo, 100 - Campinas - SP\nDESTINATÁRIO / REMETENTE\nNome Empresa Cliente\nMUNICÍPIO FONE/FAX UF INSCRIÇÃO ESTADUAL\nSalvador 7133334444 BA 123456\nCÁLCULO DO IMPOSTO\nTRANSPORTADOR\nRua Exemplo - Curitiba - PR');
   assert.equal(route.origin,'SP');assert.equal(route.destination,'BA');
+  const incomplete=extractDocumentRoute('RECEBEMOS DANFE PARA Cliente Exemplo - Salvador - BA\nDANFE\nEmpresa sem UF declarada\nDESTINATÁRIO / REMETENTE\nCidade: Salvador - BA\nCÁLCULO DO IMPOSTO');
+  assert.equal(incomplete.origin,null);assert.equal(incomplete.destination,'BA');
 });
 test('vertical UF values work in either section order',()=>{
   const route=extractDocumentRoute('DADOS DO CLIENTE\nUF\nRJ\nFORNECEDOR\nEstado:\nMinas Gerais');
@@ -32,4 +34,8 @@ test('does not infer states from phone, CNPJ, municipality alone or product code
 test('NFS-e party states remain informational while goods import stays blocked',()=>{
   const result=recognizeDocument([],'DANFSe\nPRESTADOR / FORNECEDOR\nMunicípio / Sigla UF\nCuritiba / PR\nTOMADOR / ADQUIRENTE\nMunicípio / Sigla UF\nSão Paulo / SP\nSERVIÇO PRESTADO\nCuritiba / PR');
   assert.equal(result.origin,'PR');assert.equal(result.destination,'SP');assert.equal(result.blocked,true);assert.equal(result.items.length,0);
+});
+test('unlabelled DANFE issuer addresses exclude the recipient receipt stub',()=>{
+  const route=extractDocumentRoute('RECEBEMOS OS PRODUTOS PARA Cliente Exemplo - Salvador - BA\nEmpresa Exemplo DANFE\nRua Exemplo, 100\nCampinas - SP\nDESTINATÁRIO / REMETENTE\nCidade: Salvador - BA\nCÁLCULO DO IMPOSTO');
+  assert.equal(route.origin,'SP');assert.equal(route.destination,'BA');
 });

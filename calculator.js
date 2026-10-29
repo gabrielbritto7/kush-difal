@@ -7,12 +7,14 @@ export function interstateRate(origin, destination, imported = false) {
   return SOUTH_SOUTHEAST.includes(origin) && !SOUTH_SOUTHEAST.includes(destination) ? 7 : 12;
 }
 export const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
-export function calculate({ items, origin, destination, internalRate, interstate, fcp, eligible = true }) {
+export function calculate({ items, origin, destination, internalRate, interstate, fcp, eligible = true,useItemRates=true }) {
   for (const [name, value] of Object.entries({internalRate, interstate, fcp})) {
     if (!Number.isFinite(value) || value < 0 || value >= 100) throw new Error('Alíquota inválida: ' + name);
   }
-  if (internalRate < interstate && origin !== destination) throw new Error('A alíquota interna deve ser igual ou superior à interestadual.');
   const rows = items.map(item => {
+    const itemRate=useItemRates&&item.interstateRate!==undefined?item.interstateRate:interstate;
+    if(!Number.isFinite(itemRate)||itemRate<0||itemRate>=100)throw new Error('Alíquota interestadual inválida no item '+item.description);
+    if(internalRate<itemRate&&origin!==destination)throw new Error('A alíquota interna deve ser igual ou superior à interestadual.');
     for (const key of ['quantity','price','freight','other','discount']) {
       if (!Number.isFinite(item[key]) || item[key] < 0) throw new Error('Confira os valores do item ' + item.description);
     }
@@ -20,9 +22,9 @@ export function calculate({ items, origin, destination, internalRate, interstate
     const base = round(item.quantity * item.price + item.freight + item.other - item.discount);
     if (base < 0) throw new Error('O desconto não pode superar o valor do item.');
     const applies = eligible && origin !== destination;
-    const difal = applies ? round(base * (internalRate - interstate) / 100) : 0;
+    const difal = applies ? round(base * (internalRate - itemRate) / 100) : 0;
     const povertyFund = applies ? round(base * fcp / 100) : 0;
-    return { ...item, base, difal, povertyFund, total: round(difal + povertyFund) };
+    return { ...item, appliedInterstate:itemRate,base, difal, povertyFund, total: round(difal + povertyFund) };
   });
   return rows.reduce((result, row) => {
     result.rows.push(row);
@@ -64,6 +66,6 @@ export function parseCSV(text) {
   return records.map((record, index) => {
     const get = name => record[headers.indexOf(name)] ?? '';
     if (!get('descricao').trim() || !get('quantidade').trim() || !get('valor_unitario').trim()) throw new Error('Preencha descrição, quantidade e valor unitário na linha ' + (index + 2));
-    return { description: get('descricao').trim(), ncm: get('ncm').trim(), quantity: parseNumber(get('quantidade')), price: parseNumber(get('valor_unitario')), freight: parseNumber(get('frete')), other: parseNumber(get('outras_despesas')), discount: parseNumber(get('desconto')) };
+    return { description: get('descricao').trim(), ncm: get('ncm').trim(), quantity: parseNumber(get('quantidade')), price: parseNumber(get('valor_unitario')), freight: parseNumber(get('frete')), other: parseNumber(get('outras_despesas')), discount: parseNumber(get('desconto')),...(get('icms_interestadual').trim()?{interstateRate:parseNumber(get('icms_interestadual'))}:{}) };
   });
 }

@@ -15,6 +15,14 @@ test('same state and ineligible transactions do not charge interstate DIFAL or F
 test('round each item before summing',()=>{
   const result=calculate({...config,items:Array.from({length:3},()=>({...item,quantity:1,price:0.1,freight:0,other:0,discount:0})),internalRate:18,interstate:12,fcp:0}); assert.equal(result.difal,0.03);
 });
+test('mixed invoice interstate rates are applied per item and can be explicitly overridden',()=>{
+  const items=[{...item,quantity:1,price:100,freight:0,other:0,discount:0,interstateRate:12},{...item,quantity:1,price:200,freight:0,other:0,discount:0,interstateRate:4}];
+  const result=calculate({...config,items,internalRate:19.5,fcp:0});
+  assert.equal(result.difal,38.5);assert.deepEqual(result.rows.map(row=>row.appliedInterstate),[12,4]);
+  assert.equal(calculate({...config,items,internalRate:19.5,fcp:0,useItemRates:false}).difal,22.5);
+  assert.throws(()=>calculate({...config,items:[{...items[0],interstateRate:NaN}]}),/inválida/);
+  assert.throws(()=>calculate({...config,items:[{...items[0],interstateRate:25}]}),/superior/);
+});
 test('reject invalid numbers, negative base and mismatched rates',()=>{
   assert.throws(()=>calculate({...config,internalRate:NaN})); assert.throws(()=>calculate({...config,internalRate:10})); assert.throws(()=>calculate({...config,items:[{...item,quantity:0}]})); assert.throws(()=>calculate({...config,items:[{...item,discount:1000}]})); assert.throws(()=>calculate({...config,fcp:100}));
 });

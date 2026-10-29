@@ -60,5 +60,6 @@ export function parseDocumentText(text) {
 }
 export function itemsToCSV(items) {
   const cell=value=>'"'+String(value).replaceAll('"','""')+'"';
-  return ['descricao;ncm;quantidade;valor_unitario;frete;outras_despesas;desconto',...items.map(item=>[item.description,item.ncm,...['quantity','price','freight','other','discount'].map(key=>String(item[key]).replace('.',','))].map(cell).join(';'))].join('\n');
+  const rates=items.some(item=>item.interstateRate!==undefined);
+  return ['descricao;ncm;quantidade;valor_unitario;frete;outras_despesas;desconto'+(rates?';icms_interestadual':''),...items.map(item=>[item.description,item.ncm,...['quantity','price','freight','other','discount'].map(key=>String(item[key]).replace('.',',')),...(rates?[item.interstateRate??'']:[])].map(cell).join(';'))].join('\n');
 }

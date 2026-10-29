@@ -54,6 +54,13 @@ export function extractDocumentRoute(text){
     if(current)current.lines.push(line);
   }
   for(const block of blocks)for(const state of addressStates(block.lines))add(block.role,state,block.role==='origin'?'Endereço do emitente / fornecedor':'Endereço do destinatário / cliente');
+  // Some DANFEs omit an emitente heading. The issuer address is inside the DANFE header,
+  // after the receipt stub and before the recipient section, never in the receipt itself.
+  const danfe=lines.findIndex(line=>/\bdanfe\b/.test(normalize(line))&&!/recebemos|recebimento|indicada|destinatario/.test(normalize(line)));
+  const recipient=lines.findIndex((line,index)=>index>danfe&&destinationHeading.test(normalize(line)));
+  if(danfe>=0&&recipient>danfe&&!evidence.origin.length){
+    for(const state of addressStates(lines.slice(danfe,recipient)))add('origin',state,'Endereço do emitente no cabeçalho do DANFE');
+  }
   // In a budget, a company address before the client block belongs to the supplier.
   // Require an actual address and CNPJ; an unlabelled state elsewhere is insufficient.
   const prefix=lines.slice(0,firstHeading);

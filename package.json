@@ -6,13 +6,14 @@
   "scripts": {
     "dev": "node --use-env-proxy server.mjs",
     "start": "node --use-env-proxy server.mjs",
-    "test": "node tests/calculator.test.js && node tests/parsing.test.js && node tests/table-model.test.js && node tests/recognized-document.test.js && node tests/document-route.test.js && node tests/icms-rates.test.js && node tests/invoice-layout.test.js",
-    "check": "node --check app.js && node --check browser-reader.js && node --check browser-table-ai.js && node --check table-model.js && node --check table-ai.worker.js && node --check recognized-document.js && node --check document-route.js && node --check icms-rates.js && node --check invoice-layout.js && node --check scripts/build.mjs && node --check scripts/smoke-browser.mjs && node --check scripts/update-icms-rates.mjs && node --check scripts/test-invoices.mjs && node --check tests/fixtures/invoice-pdf.mjs",
+    "test": "node tests/calculator.test.js && node tests/parsing.test.js && node tests/table-model.test.js && node tests/recognized-document.test.js && node tests/document-route.test.js && node tests/icms-rates.test.js && node tests/invoice-layout.test.js && node tests/budget-layout.test.js",
+    "check": "node --check app.js && node --check browser-reader.js && node --check browser-table-ai.js && node --check table-model.js && node --check table-ai.worker.js && node --check recognized-document.js && node --check document-route.js && node --check icms-rates.js && node --check invoice-layout.js && node --check budget-layout.js && node --check scripts/build.mjs && node --check scripts/smoke-browser.mjs && node --check scripts/update-icms-rates.mjs && node --check scripts/test-invoices.mjs && node --check scripts/test-photos.mjs && node --check tests/fixtures/invoice-pdf.mjs && node --check tests/fixtures/budget-photo.mjs",
     "build": "node scripts/build.mjs",
     "test:native": "node tests/documents.test.js",
     "test:backend": "python3 -m unittest discover -s backend/tests -v",
     "test:browser": "node scripts/smoke-browser.mjs",
     "test:invoices": "node scripts/test-invoices.mjs",
+    "test:photos": "node scripts/test-photos.mjs",
     "update:rates": "node --use-env-proxy scripts/update-icms-rates.mjs"
   },
   "engines": {

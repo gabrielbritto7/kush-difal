@@ -96,16 +96,16 @@ export function findTableRegions(words,width,height,{invoice=false}={}) {
     let bottom=lines[i].y1,last=i,rows=0;const selected=[...lines[i].words];
     for(let j=i+1;j<Math.min(lines.length,i+150);j++){
       const text=normalize(lines[j].text);
-      if(/(?:valor\s+total\s+(?:dos?\s+)?produtos|total\s+(?:dos?\s+)?produtos|sub\s*total|forma\s*(?:de\s*)?pagamento|base\s+de\s+calculo|calculo\s+do\s+imposto)/.test(text))break;
+      if(/(?:valor\s+total\s+(?:dos?\s+)?produtos|total\s+(?:dos?\s+)?produtos|sub\s*total|forma\s*(?:de\s*)?pagamento|base\s+de\s+calculo|calculo\s+do\s+imposto)|^(?:volumes?\b|(?:\(=\)\s*)?total\s+(?:do\s+)?orcamento|vendedor\b|obs\s*:)/.test(text))break;
       if(rows && lines[j].y0-bottom>Math.max(28,lines[i].height*3.5))break;
       const amounts=lines[j].text.match(/\d[\d.]*[,\.]\d{2,4}\b/g)||[];
       if(amounts.length>=2){rows++;bottom=lines[j].y1;last=j;selected.push(...lines[j].words);}
-      else if(!rows || lines[j].y0-bottom<lines[i].height*1.8){selected.push(...lines[j].words);}
+      else if(!rows || lines[j].y0-bottom<lines[i].height*1.8){selected.push(...lines[j].words);if(rows){bottom=Math.max(bottom,lines[j].y1);last=j;}}
       else break;
     }
     if(!rows)continue;
     const padding=Math.max(5,lines[i].height*.65);
-    regions.push({x0:Math.max(0,Math.min(...selected.map(w=>w.x0))-padding),y0:Math.max(0,lines[i].y0-padding),x1:Math.min(width,Math.max(...selected.map(w=>w.x1))+padding),y1:Math.min(height,bottom+padding)});
+    regions.push({x0:Math.max(0,Math.min(...selected.map(w=>w.x0))-padding),y0:Math.max(0,lines[i].y0-padding),x1:Math.min(width,Math.max(...selected.map(w=>w.x1))+padding),y1:Math.min(height,bottom+padding),headerY0:lines[i].y0,headerY1:lines[i].y1,dataY1:bottom});
     i=last;
   }
   return regions;

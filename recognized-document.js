@@ -54,6 +54,14 @@ export function amountAfter(text,patterns){
   }
   return null;
 }
+export function readDocumentAmounts(text){
+  return {
+    declaredProducts:amountAfter(text,[/valor total\s+(?:dos?\s+)?produtos/,/total\s+(?:dos?\s+)?produtos/,/valor\s+(?:dos?\s+)?produtos/]),
+    delivery:amountAfter(text,[/^\s*(?:\(\+\)\s*)?taxa\s+de\s+entrega/,/^\s*(?:\(\+\)\s*)?(?:valor\s+(?:do\s+)?)?frete\b/]),
+    discount:amountAfter(text,[/^\s*(?:\(-\)\s*)?desconto(?:\s+total)?\b/]),
+    declaredTotal:amountAfter(text,[/total\s+(?:do\s+)?orcamento/,/valor total\s+(?:da\s+)?nota/]),
+  };
+}
 function sum(items,selector){return round(items.reduce((total,item)=>total+selector(item),0));}
 function allocate(items,key,total){
   if(total===null || !total || !items.length)return;
@@ -148,10 +156,8 @@ export function recognizeDocument(tables,text,metadata={}){
     }
   }
   if(items.length>500)throw new Error('Limite de 500 produtos por documento. Divida o arquivo.');
-  const products=sum(items,item=>round(item.quantity*item.price)),declaredProducts=metadata.declaredProducts??amountAfter(text,[/valor total\s+(?:dos?\s+)?produtos/,/total\s+(?:dos?\s+)?produtos/,/valor\s+(?:dos?\s+)?produtos/]);
-  const delivery=metadata.delivery??amountAfter(text,[/^\s*(?:\(\+\)\s*)?taxa\s+de\s+entrega/,/^\s*(?:\(\+\)\s*)?(?:valor\s+(?:do\s+)?)?frete\b/]);
-  const discount=metadata.discount??amountAfter(text,[/^\s*(?:\(-\)\s*)?desconto(?:\s+total)?\b/]);
-  const declaredTotal=metadata.declaredTotal??amountAfter(text,[/total\s+(?:do\s+)?orcamento/,/valor total\s+(?:da\s+)?nota/]);
+  const amounts=readDocumentAmounts(text),products=sum(items,item=>round(item.quantity*item.price)),declaredProducts=metadata.declaredProducts??amounts.declaredProducts;
+  const delivery=metadata.delivery??amounts.delivery,discount=metadata.discount??amounts.discount,declaredTotal=metadata.declaredTotal??amounts.declaredTotal;
   const productMatch=declaredProducts===null || Math.abs(products-declaredProducts)<=.021;
   if(productMatch && !rejections.length){
     const globals={freight:delivery,discount,insurance:metadata.insurance,other:metadata.other,ipi:metadata.ipi};
@@ -170,6 +176,6 @@ export function recognizeDocument(tables,text,metadata={}){
   if(!items.length)warnings.push('A IA não reconheceu produtos com quantidade e preço confiáveis neste documento. Não serão inventados itens ou valores.');
   if(items.some(item=>!item.ncm))warnings.push('O documento não informa NCM em todos os itens. Nenhum NCM ou alíquota foi deduzido pela IA.');
   warnings.push(...route.routeWarnings);
-  if(metadata.conflicts?.length)warnings.push('Foram encontrados totais divergentes entre as páginas da nota. A importação foi bloqueada.');
+  if(metadata.conflicts?.length)warnings.push('Foram encontrados totais divergentes no documento. A importação foi bloqueada.');
   return {items,text,tables,documentType:kind,...route,warnings:[...new Set(warnings)],verification:{complete:items.length>0 && productMatch && totalMatch && !rejections.length&&!metadata.conflicts?.length,detectedRows,recognizedRows:items.length,rejections,mappedTables,products,declaredProducts,delivery:delivery||0,discount:discount||0,base,declaredTotal}};
 }

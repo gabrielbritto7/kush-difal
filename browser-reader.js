@@ -1,7 +1,8 @@
 import { BrowserTableAI } from './browser-table-ai.js';
 import { wordsToLines } from './table-model.js';
-import { recognizeDocument,documentKind } from './recognized-document.js';
+import { recognizeDocument,documentKind,readDocumentAmounts } from './recognized-document.js';
 import { readRuledInvoiceTables,readInvoiceAmounts } from './invoice-layout.js';
+import { readAlignedBudgetTables } from './budget-layout.js';
 
 export function readerStatus(){
   return {enabled:typeof Worker!=='undefined' && typeof WebAssembly!=='undefined' && !!globalThis.crypto?.subtle,language:'por',engine:'SLANet-plus / ONNX no navegador'};
@@ -41,14 +42,22 @@ export async function readDocument(file,onProgress=()=>{}){
   const ai=new BrowserTableAI();let ocr=null,pdf=null,loading=null,bitmap=null,expired=false;
   const check=()=>{if(expired)throw new Error('Tempo limite excedido. Divida o documento ou use o XML original.');};
   const timer=setTimeout(()=>{expired=true;ai.close();ocr?.terminate();loading?.destroy();},300000);
-  const recognize=async canvas=>{
+  const recognize=async(canvas,mode='3')=>{
     if(!ocr){
       onProgress('Carregando reconhecimento de texto em português…');
       const {default:{createWorker}}=await import('/vendor/tesseract.mjs');check();
       ocr=await createWorker('por',1,{workerPath:new URL('/vendor/ocr-worker.js',location.href).href,corePath:new URL('/vendor/core',location.href).href,langPath:new URL('/vendor/lang',location.href).href,workerBlobURL:false,logger:event=>{if(event.status==='recognizing text')onProgress(`Lendo palavras e valores: ${Math.round(event.progress*100)}%`);}});
       await ocr.setParameters({tessedit_pageseg_mode:'3',preserve_interword_spaces:'1'});
     }
-    const result=await ocr.recognize(canvas,{}, {text:true,tsv:true});check();
+    const result=await ocr.recognize(canvas,{rotateAuto:true,tessedit_pageseg_mode:mode}, {text:true,tsv:true});check();
+    if(Math.abs(result.data.rotateRadians||0)>=.005){
+      onProgress('Alinhando o documento para separar as linhas e colunas…');
+      // Reuse Tesseract's own rotated pixels so OCR boxes and neural input stay aligned.
+      const aligned=await ocr.recognize(canvas,{rotateRadians:result.data.rotateRadians},{text:false,tsv:false,imageColor:true});check();
+      const image=new Image();image.src=aligned.data.imageColor;await image.decode();check();
+      canvas.width=image.naturalWidth;canvas.height=image.naturalHeight;
+      canvas.getContext('2d').drawImage(image,0,0);
+    }
     return tsvWords(result.data.tsv);
   };
   try{
@@ -57,13 +66,41 @@ export async function readDocument(file,onProgress=()=>{}){
       check();const text=wordsToLines(words).map(line=>line.text).join('\n'),kind=documentKind(text);
       if(kind==='service_invoice')return {text,tables:[],fields:{},items:0,service:true};
       const learned=await ai.analyze(canvas,words,onProgress,{invoice:kind==='goods_invoice'});
-      const layout=kind==='goods_invoice'?readRuledInvoiceTables(canvas,words):[];
-      const neuralResult=recognizeDocument(learned,text),layoutResult=layout.length?recognizeDocument(layout,text):null;
-      const useLayout=layoutResult&&layoutResult.items.length>0&&(layoutResult.items.length>neuralResult.items.length||(layoutResult.items.length===neuralResult.items.length&&layoutResult.verification.rejections.length<=neuralResult.verification.rejections.length));
-      return {text,tables:useLayout?layout:learned,fields:kind==='goods_invoice'?readInvoiceAmounts(words):{},items:(useLayout?layoutResult:neuralResult).items.length,layout:!!useLayout};
+      const layout=kind==='goods_invoice'?readRuledInvoiceTables(canvas,words):readAlignedBudgetTables(words,canvas.width,canvas.height);
+      const fields=Object.fromEntries(Object.entries({...readDocumentAmounts(text),...(kind==='goods_invoice'?readInvoiceAmounts(words):{})}).filter(([,value])=>Number.isFinite(value)));
+      const neuralResult=recognizeDocument(learned,text,fields),layoutResult=layout.length?recognizeDocument(layout,text,fields):null;
+      const comparable=layoutResult&&layoutResult.verification.complete===neuralResult.verification.complete;
+      const useLayout=layoutResult&&layoutResult.items.length>0&&((layoutResult.verification.complete&&!neuralResult.verification.complete)||(comparable&&(layoutResult.items.length>neuralResult.items.length||(kind==='goods_invoice'&&layoutResult.items.length===neuralResult.items.length&&layoutResult.verification.rejections.length<=neuralResult.verification.rejections.length))));
+      const selected=useLayout?layoutResult:neuralResult,hasTotals=Number.isFinite(fields.declaredTotal);
+      return {text,tables:useLayout?layout:learned,fields,items:selected.items.length,verification:selected.verification,hasTotals,layout:!!useLayout};
+    };
+    const readOCRPage=async canvas=>{
+      let record=await processPage(canvas,await recognize(canvas));
+      if(!record.service&&(!record.verification.complete||!record.hasTotals)){
+        // Automatic page segmentation can discard isolated numeric columns in a JPEG.
+        // A second pass reads one text block; keep all total checks on that interpretation.
+        onProgress('Rechecando a leitura para recuperar produtos e valores…');
+        let second=await processPage(canvas,await recognize(canvas,'6'));
+        if(second.service)return second;
+        const recoveredTotal=!record.hasTotals&&second.hasTotals,fields={...record.fields},conflicts=[];
+        for(const [key,value]of Object.entries(second.fields)){
+          if(fields[key]!==undefined&&Math.abs(fields[key]-value)>.021)conflicts.push(key);
+          else fields[key]=value;
+        }
+        const recheck=reading=>{
+          const result=recognizeDocument(reading.tables,reading.text,{...fields,conflicts});
+          return {...reading,fields,conflicts,hasTotals:Number.isFinite(fields.declaredTotal),items:result.items.length,verification:result.verification};
+        };
+        record=recheck(record);second=recheck(second);
+        const moreComplete=second.verification.complete&&!record.verification.complete;
+        const comparable=second.verification.complete===record.verification.complete;
+        if(moreComplete||comparable&&(second.items>record.items||second.items===record.items&&recoveredTotal))record=second;
+      }
+      return record;
     };
     const collect=record=>{
       texts.push(record.text);tables.push(...record.tables);usedLayout||=record.layout;
+      metadata.conflicts.push(...record.conflicts||[]);
       for(const [key,value]of Object.entries(record.fields)){
         if(metadata[key]!==undefined&&Math.abs(metadata[key]-value)>.021)metadata.conflicts.push(key);
         else metadata[key]=value;
@@ -80,12 +117,12 @@ export async function readDocument(file,onProgress=()=>{}){
         const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
         try{
           await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
-          let words=pdfWords(await page.getTextContent(),viewport,pdfjs),usedOCR=words.length<15;
-          if(usedOCR){words=await recognize(canvas);textSource='ocr';}
-          let record=await processPage(canvas,words);
+          const words=pdfWords(await page.getTextContent(),viewport,pdfjs),usedOCR=words.length<15;
+          if(usedOCR)textSource='ocr';
+          let record=usedOCR?await readOCRPage(canvas):await processPage(canvas,words);
           if(!usedOCR&&!record.items&&!record.service){
             onProgress(`Rechecando a página ${number} com OCR em português…`);
-            const second=await processPage(canvas,await recognize(canvas));
+            const second=await readOCRPage(canvas);
             if(second.items>record.items||second.service){record=second;textSource='ocr';}
           }
           collect(record);
@@ -96,7 +133,7 @@ export async function readDocument(file,onProgress=()=>{}){
       if(bitmap.width*bitmap.height>25000000)throw new Error('A imagem excede 25 megapixels. Reduza o tamanho antes de importar.');
       const scale=Math.min(2,Math.max(1,1600/bitmap.width),3000/Math.max(bitmap.width,bitmap.height));
       const canvas=document.createElement('canvas');canvas.width=Math.round(bitmap.width*scale);canvas.height=Math.round(bitmap.height*scale);
-      try{canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);collect(await processPage(canvas,await recognize(canvas)));textSource='ocr';}finally{canvas.width=canvas.height=0;}
+      try{const context=canvas.getContext('2d');context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);collect(await readOCRPage(canvas));textSource='ocr';}finally{canvas.width=canvas.height=0;}
     }
     const text=texts.join('\n');if(!text.trim())throw new Error('Não há texto legível. Envie uma foto mais nítida ou o XML original.');
     const result=recognizeDocument(tables,text,metadata);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recognizeDocument,fieldName,documentKind } from '../recognized-document.js';
+import { recognizeDocument,fieldName,documentKind,readDocumentAmounts } from '../recognized-document.js';
 import { calculate } from '../calculator.js';
 
 const table={rows:[
@@ -53,4 +53,14 @@ test('OCR table-border glyphs are removed without repairing or inventing digits'
   const table={rows:[['Descrição','Qtd','Valor Unit','Total'],['Componente Exemplo','[2,00','50,00|','100,00']]};
   assert.equal(recognizeDocument([table],'DANFE',{declaredProducts:100,declaredTotal:100}).verification.complete,true);
   table.rows[1][1]='[Z,00';assert.equal(recognizeDocument([table],'DANFE',{declaredProducts:100,declaredTotal:100}).verification.complete,false);
+});
+test('a second OCR reading cannot drop a declared total or freight from the first reading',()=>{
+  const amounts=readDocumentAmounts(text);
+  assert.equal(amounts.delivery,4.98);assert.equal(amounts.discount,0);assert.equal(amounts.declaredTotal,32);
+  assert.deepEqual(readDocumentAmounts('Orçamento sem totais legíveis'),{declaredProducts:null,delivery:null,discount:null,declaredTotal:null});
+  const second='ORÇAMENTO\nCliente: Empresa Exemplo';
+  const result=recognizeDocument([table],second,amounts);
+  assert.equal(result.verification.complete,true);assert.equal(result.verification.base,32);
+  assert.equal(recognizeDocument([table],second,{...amounts,declaredTotal:33}).verification.complete,false);
+  assert.equal(recognizeDocument([table],second,{...amounts,conflicts:['declaredTotal']}).verification.complete,false);
 });

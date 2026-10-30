@@ -20,10 +20,10 @@ Para publicar `difal.kush-archives.com.br`, associe o domínio ao projeto e apli
 
 ## Como funciona
 
-1. PDF.js extrai o texto e as posições de PDFs selecionáveis; PDFs digitalizados e fotos passam por OCR em português com caixas de palavras. Se um PDF tiver uma camada de texto que não produz itens, o leitor tenta OCR automaticamente. Marcas d'água diagonais não entram nas linhas de texto dos produtos.
+1. PDF.js extrai o texto e as posições de PDFs selecionáveis; PDFs digitalizados e fotos passam por OCR em português com caixas de palavras. O OCR corrige pequenas inclinações e a IA recebe a mesma imagem alinhada, preservando as posições das palavras. PNGs transparentes ganham fundo branco antes da leitura. Quando a leitura por OCR é incompleta ou não recupera totais declarados, uma segunda segmentação tenta recuperar colunas numéricas ignoradas na primeira leitura. Se um PDF tiver uma camada de texto que não produz itens, o leitor tenta OCR automaticamente. Marcas d'água diagonais não entram nas linhas de texto dos produtos.
 2. O site localiza regiões candidatas da tabela, sem depender de espaçamento fixo no texto. Cabeçalhos de DANFE em mais de uma linha e descrições quebradas não encerram a tabela; todas as páginas são processadas.
 3. **SLANet-plus**, uma rede neural de estrutura de tabelas, prevê células, linhas e colunas com ONNX Runtime Web. O modelo é executado de verdade no dispositivo, não substituído por resposta simulada.
-4. O texto é associado às células. Em notas com grade, as posições do texto e as linhas da própria página oferecem uma segunda leitura estruturada, conferida com quantidade, preço e totais. Ela corrige células que a rede tenha fundido sem depender de nome de fornecedor, número da nota ou valores específicos. O adaptador reconhece títulos com erros comuns de OCR, quantidade com unidade, NCM explícito na descrição, descrições deslocadas e texto sobreposto à quantidade. Não gera preços nem produtos novos. Artefatos de borda de OCR são removidos dos números sem trocar letras por dígitos.
+4. O texto é associado às células. Em notas com grade, as posições do texto e as linhas da própria página oferecem uma segunda leitura estruturada. Em orçamentos sem grade, os cabeçalhos explícitos e a posição das palavras permitem recuperar colunas que a rede tenha fundido, inclusive tabelas curtas com marca, quantidade, preço, ST e total. As duas leituras são conferidas com quantidade, preço e totais; uma interpretação incompleta não substitui outra que já confere. A recuperação não depende de nome de fornecedor, número do orçamento ou valores específicos. O adaptador reconhece títulos com erros comuns de OCR, quantidade com unidade, NCM explícito na descrição, descrições deslocadas e texto sobreposto à quantidade. Não gera preços nem produtos novos. Artefatos de borda de OCR são removidos dos números sem trocar letras por dígitos.
 5. Quantidade × preço é conferido com o total da linha. Pequenas diferenças de arredondamento preservam o total impresso, com aviso. Entrega/frete e desconto globais explicitamente identificados são rateados em centavos; não são adicionados novamente quando já aparecem nas linhas. Encargos não modelados causam divergência de total e exigem conferência.
 6. Quando um total de produtos ou de orçamento está explícito, ele precisa conferir com a soma reconhecida. Linhas rejeitadas ou divergências bloqueiam a importação automática. Os campos aparecem preenchidos; o usuário revisa e confirma, sem ter de redigitar os produtos.
 
@@ -58,11 +58,14 @@ npm test
 npm run check
 npm run test:browser
 npm run test:invoices
+npm run test:photos
 ```
 
 `npm test` verifica os cálculos, mapeamento das células, detecção de NFS-e, rateio, rejeição de divergências e hash do modelo. `test:browser` executa **inferência real** no Chromium com um PDF sintético e passa da seleção do arquivo ao cálculo, sem preencher os produtos manualmente. Requer Chromium instalado (`BROWSER_PATH` pode selecionar o executável). O script inicia um servidor de teste ou usa `TEST_BASE_URL`.
 
 `test:invoices` gera DANFEs fictícios de duas páginas, com cabeçalho dividido, descrições em várias linhas e taxas mistas de 4% e 12%. Confere leitura, NCMs, seleção automática de UFs e ICMS, cálculo por item, alteração de rota, exportação e bloqueio de uma nota inconsistente. Executa o modelo real; não usa respostas simuladas nem documentos de clientes no repositório.
+
+`test:photos` gera orçamentos fictícios de duas linhas em PNG, JPEG e WebP, em resoluções diferentes, com leve inclinação e transparência. Executa OCR e inferência reais, confere descrição, quantidade, preço/total, UFs e cálculo, e mantém bloqueada uma foto com total divergente. A ausência da origem no documento não é preenchida por suposição. Os arquivos de teste são criados em memória; documentos enviados pelo usuário continuam fora do repositório.
 
 Para testar documentos privados sem copiá-los para o projeto:
 

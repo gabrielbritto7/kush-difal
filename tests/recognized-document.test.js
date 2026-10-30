@@ -15,11 +15,11 @@ test('structured AI cells recover shifted descriptions, overflow and rounded uni
   assert.equal(result.items.length,2);assert.equal(result.verification.complete,true);
   assert.match(result.items[0].description,/Parafuso/);assert.match(result.items[1].description,/TIPO A/);
   assert.equal(result.items[1].quantity,3);assert.equal(result.items[1].price,7/3);
-  assert.equal(result.verification.products,27.02);assert.equal(result.verification.base,32);
+  assert.equal(result.verification.products,27.02);assert.equal(result.verification.base,27.02);assert.equal(result.verification.declaredTotal,32);
   assert.equal(result.origin,null);assert.equal(result.destination,'PR');
   assert.equal(recognizeDocument([table],text.replace('Cidade Exemplo - PR','Cidade Exemplo PR')).destination,'PR');
-  assert.equal(result.items.reduce((sum,item)=>Math.round((sum+item.freight)*100)/100,0),4.98);
-  const calculated=calculate({items:result.items,origin:'SP',destination:'PR',internalRate:18,interstate:12,fcp:0});assert.equal(calculated.base,32);
+  assert.equal(result.verification.delivery,4.98);assert.equal(result.items.reduce((sum,item)=>Math.round((sum+item.freight)*100)/100,0),0);
+  const calculated=calculate({items:result.items,origin:'SP',destination:'PR',internalRate:18,interstate:12,fcp:0});assert.equal(calculated.base,27.02);
 });
 test('common OCR heading errors are repaired without altering item digits',()=>{
   assert.equal(fieldName('GTDE.'),'quantity');assert.equal(fieldName('OQOTDE.'),'quantity');assert.equal(fieldName('Código'),'ignore');assert.equal(fieldName('Unidade'),'ignore');
@@ -35,14 +35,14 @@ test('NFS-e is recognized as service, never transformed into a goods DIFAL base'
   const result=recognizeDocument([],source);assert.equal(result.blocked,true);assert.equal(result.items.length,0);assert.equal(result.service.amount,1000);assert.equal(result.service.description,'MANUTENÇÃO DE EQUIPAMENTO');
   assert.equal(documentKind('DANFE Documento auxiliar da NF-e'),'goods_invoice');
 });
-test('global discounts are allocated once and do not invent classification or origin',()=>{
+test('global discounts do not alter the products base or invent classification or origin',()=>{
   const result=recognizeDocument([table],text.replace('Desconto: 0,00','Desconto: 2,00').replace('Orçamento: 32,00','Orçamento: 30,00'));
-  assert.equal(result.verification.base,30);assert.equal(result.verification.complete,true);assert.equal(result.items.every(item=>item.ncm===''),true);assert.equal(result.origin,null);
+  assert.equal(result.verification.base,27.02);assert.equal(result.verification.complete,true);assert.equal(result.items.every(item=>item.ncm===''),true);assert.equal(result.origin,null);
 });
-test('invoice row totals are gross products; IPI, freight, insurance and discount are applied once',()=>{
+test('invoice row totals define the products base; invoice charges and grand total are informational',()=>{
   const table={rows:[['Descrição','NCM','QTD / UN','VLR UNIT','VLR TOTAL','VALOR IPI','VALOR DESC','ALÍQ ICMS'],['Peça Alfa','12345678','1,0000 UN','100,0000','100,00','10,00','5,00','4,00']]};
   const result=recognizeDocument([table],'DANFE\nOrigem: SP\nDestino: PR',{declaredProducts:100,declaredTotal:122,delivery:15,insurance:2,ipi:10,discount:5,other:0});
-  assert.equal(result.verification.complete,true);assert.equal(result.verification.base,122);assert.equal(result.items[0].price,100);assert.equal(result.items[0].other,12);assert.equal(result.items[0].interstateRate,4);
+  assert.equal(result.verification.complete,true);assert.equal(result.verification.base,100);assert.equal(result.verification.declaredTotal,122);assert.equal(result.items[0].price,100);assert.equal(result.items[0].other,10);assert.equal(result.items[0].interstateRate,4);
   const incomplete=recognizeDocument([table],'DANFE\nOrigem: SP\nDestino: PR',{declaredProducts:200,declaredTotal:222});assert.equal(incomplete.verification.complete,false);
 });
 test('explicit NCM tags can be read from newer invoice descriptions without guessing a classification',()=>{
@@ -54,13 +54,27 @@ test('OCR table-border glyphs are removed without repairing or inventing digits'
   assert.equal(recognizeDocument([table],'DANFE',{declaredProducts:100,declaredTotal:100}).verification.complete,true);
   table.rows[1][1]='[Z,00';assert.equal(recognizeDocument([table],'DANFE',{declaredProducts:100,declaredTotal:100}).verification.complete,false);
 });
-test('a second OCR reading cannot drop a declared total or freight from the first reading',()=>{
+test('a second OCR reading must preserve the products constraint while other totals remain informational',()=>{
   const amounts=readDocumentAmounts(text);
   assert.equal(amounts.delivery,4.98);assert.equal(amounts.discount,0);assert.equal(amounts.declaredTotal,32);
   assert.deepEqual(readDocumentAmounts('Orçamento sem totais legíveis'),{declaredProducts:null,delivery:null,discount:null,declaredTotal:null});
   const second='ORÇAMENTO\nCliente: Empresa Exemplo';
   const result=recognizeDocument([table],second,amounts);
-  assert.equal(result.verification.complete,true);assert.equal(result.verification.base,32);
-  assert.equal(recognizeDocument([table],second,{...amounts,declaredTotal:33}).verification.complete,false);
-  assert.equal(recognizeDocument([table],second,{...amounts,conflicts:['declaredTotal']}).verification.complete,false);
+  assert.equal(result.verification.complete,true);assert.equal(result.verification.base,27.02);assert.equal(result.verification.declaredTotal,32);
+  assert.equal(recognizeDocument([table],second,{...amounts,declaredTotal:33}).verification.complete,true);
+  assert.equal(recognizeDocument([table],second,{...amounts,conflicts:['declaredTotal','delivery']}).verification.complete,true);
+  assert.equal(recognizeDocument([table],second,{...amounts,declaredProducts:33}).verification.complete,false);
+  assert.equal(recognizeDocument([table],second,{...amounts,conflicts:['declaredProducts']}).verification.complete,false);
+});
+test('a small invoice-only charge does not block products or increase the DIFAL base',()=>{
+  const rows=[['Descrição','Qtd','VLR UNIT','TOTAL'],['Componente Alfa','2,00','100,00','200,00']];
+  const result=recognizeDocument([{rows}],'DANFE\nOrigem: SP\nDestino: PR',{declaredProducts:200,declaredTotal:200.05});
+  assert.equal(result.verification.complete,true);assert.equal(result.verification.base,200);assert.equal(result.verification.declaredTotal,200.05);
+  assert.equal(calculate({items:result.items,origin:'SP',destination:'PR',internalRate:19.5,interstate:12,fcp:0}).difal,15);
+  assert.equal(recognizeDocument([{rows}],'DANFE',{declaredProducts:300,declaredTotal:300.05}).verification.complete,false);
+});
+test('a shared ICMS/IPI rate heading preserves the explicit ICMS rate in its printed order',()=>{
+  const rows=[['Descrição','Qtd','VLR UNIT','TOTAL','ALÍQUOTAS ICMS IPI'],['Componente Alfa','1,00','100,00','100,00','4,00 5,00']];
+  const result=recognizeDocument([{rows}],'DANFE\nOrigem: SP\nDestino: PR',{declaredProducts:100,declaredTotal:105});
+  assert.equal(result.verification.complete,true);assert.equal(result.items[0].interstateRate,4);assert.equal(result.verification.base,100);
 });

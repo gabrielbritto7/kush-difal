@@ -35,7 +35,7 @@ try{
   for(const [index,options]of examples.entries()){
     await upload(options);
     assert.match(await page.textContent('#reader-status'),/Reconhecimento concluído/);
-    assert.match(await page.textContent('#reader-summary'),/Total confere com o documento/,'The printed grand total must be recovered, not just a computable pair of prices');
+    assert.match(await page.textContent('#reader-summary'),/Produtos conferem com o total declarado/,'The printed products total must be recovered and reconciled');
     assert.match(await page.textContent('#reader-auto-body tr:first-child td:nth-child(2)'),/ALAVANCA MODELO-A/);
     assert.match(await page.textContent('#reader-auto-body tr:nth-child(2) td:nth-child(2)'),/ANEL MODELO-B/);
     assert.equal(amount(await page.textContent('#reader-auto-body tr:first-child td:nth-child(4)')),1);

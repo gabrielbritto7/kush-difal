@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { interstateRate, calculate, parseCSV, parseNumber } from '../calculator.js';
 const item = {description:'Mesa',ncm:'94036000',quantity:2,price:150,freight:20,other:10,discount:5};
 const config = {items:[item],origin:'SP',destination:'RJ',internalRate:20,interstate:12,fcp:2};
-test('base includes freight, other costs, discount, with DIFAL and separate FCP',()=>{
-  const result=calculate(config); assert.equal(result.base,325); assert.equal(result.difal,26); assert.equal(result.povertyFund,6.5); assert.equal(result.total,32.5);
+test('products are the simulation base; freight, expenses and discounts remain informational',()=>{
+  const result=calculate(config); assert.equal(result.base,300); assert.equal(result.difal,24); assert.equal(result.povertyFund,6); assert.equal(result.total,30);
+  assert.equal(result.baseCriterion,'products');assert.equal(result.rows[0].freight,20);assert.equal(result.rows[0].other,10);assert.equal(result.rows[0].discount,5);
 });
 test('interstate rates by route and imported goods',()=>{
   assert.equal(interstateRate('SP','BA'),7); assert.equal(interstateRate('SP','ES'),7); assert.equal(interstateRate('ES','SP'),12); assert.equal(interstateRate('SP','RJ'),12); assert.equal(interstateRate('SP','RJ',true),4); assert.equal(interstateRate('SP','SP',true),0); assert.throws(()=>interstateRate('XX','SP'));
@@ -23,8 +24,8 @@ test('mixed invoice interstate rates are applied per item and can be explicitly 
   assert.throws(()=>calculate({...config,items:[{...items[0],interstateRate:NaN}]}),/inválida/);
   assert.throws(()=>calculate({...config,items:[{...items[0],interstateRate:25}]}),/superior/);
 });
-test('reject invalid numbers, negative base and mismatched rates',()=>{
-  assert.throws(()=>calculate({...config,internalRate:NaN})); assert.throws(()=>calculate({...config,internalRate:10})); assert.throws(()=>calculate({...config,items:[{...item,quantity:0}]})); assert.throws(()=>calculate({...config,items:[{...item,discount:1000}]})); assert.throws(()=>calculate({...config,fcp:100}));
+test('reject invalid numbers, negative inputs and mismatched rates',()=>{
+  assert.throws(()=>calculate({...config,internalRate:NaN})); assert.throws(()=>calculate({...config,internalRate:10})); assert.throws(()=>calculate({...config,items:[{...item,quantity:0}]})); assert.throws(()=>calculate({...config,items:[{...item,discount:-1}]})); assert.throws(()=>calculate({...config,fcp:100}));
 });
 test('CSV Brazilian decimal, accented headers, quotes and multiline cells',()=>{
   const rows=parseCSV('\uFEFFDescrição;NCM;Quantidade;Valor unitário;Frete\r\n"Mesa; de \"\"madeira\"\"\nclara";94036000;2;1.234,50;20,00\r\n');

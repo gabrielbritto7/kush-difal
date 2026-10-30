@@ -27,7 +27,7 @@ try{
     budget=join(directory,'budget.pdf');
     await writeFile(budget,pdfDocument(['ORCAMENTO DE TESTE','Origem: SP','Destino: RJ',row('Descricao','Qtd','Valor unitario','Total'),row('Componente Alfa','2,00','100,00','200,00'),row('Componente Beta','3,00','50,00','150,00'),'Valor Total Produtos: 350,00','Taxa de Entrega: 20,00','Total Orcamento: 370,00']));
   }
-  const count=Number(argument('--expected-count')||2),base=Number(argument('--expected-base')||370);
+  const count=Number(argument('--expected-count')||2),base=Number(argument('--expected-base')||350);
   const origin=process.env.TEST_BASE_URL||'http://127.0.0.1:3035';
   if(!process.env.TEST_BASE_URL){
     server=spawn(process.execPath,['server.mjs'],{cwd:new URL('../',import.meta.url),env:{...process.env,PORT:'3035'},stdio:'pipe'});

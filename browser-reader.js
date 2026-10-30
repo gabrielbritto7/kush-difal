@@ -71,7 +71,7 @@ export async function readDocument(file,onProgress=()=>{}){
       const neuralResult=recognizeDocument(learned,text,fields),layoutResult=layout.length?recognizeDocument(layout,text,fields):null;
       const comparable=layoutResult&&layoutResult.verification.complete===neuralResult.verification.complete;
       const useLayout=layoutResult&&layoutResult.items.length>0&&((layoutResult.verification.complete&&!neuralResult.verification.complete)||(comparable&&(layoutResult.items.length>neuralResult.items.length||(kind==='goods_invoice'&&layoutResult.items.length===neuralResult.items.length&&layoutResult.verification.rejections.length<=neuralResult.verification.rejections.length))));
-      const selected=useLayout?layoutResult:neuralResult,hasTotals=Number.isFinite(fields.declaredTotal);
+      const selected=useLayout?layoutResult:neuralResult,hasTotals=Number.isFinite(fields.declaredProducts);
       return {text,tables:useLayout?layout:learned,fields,items:selected.items.length,verification:selected.verification,hasTotals,layout:!!useLayout};
     };
     const readOCRPage=async canvas=>{
@@ -89,7 +89,7 @@ export async function readDocument(file,onProgress=()=>{}){
         }
         const recheck=reading=>{
           const result=recognizeDocument(reading.tables,reading.text,{...fields,conflicts});
-          return {...reading,fields,conflicts,hasTotals:Number.isFinite(fields.declaredTotal),items:result.items.length,verification:result.verification};
+          return {...reading,fields,conflicts,hasTotals:Number.isFinite(fields.declaredProducts),items:result.items.length,verification:result.verification};
         };
         record=recheck(record);second=recheck(second);
         const moreComplete=second.verification.complete&&!record.verification.complete;

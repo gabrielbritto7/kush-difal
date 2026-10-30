@@ -1,6 +1,6 @@
 import { readDocument, readerStatus } from './browser-reader.js';
 import { itemsToCSV } from './document-parser.js';
-import { STATES, interstateRate, calculate, parseCSV, parseNumber, round } from './calculator.js';
+import { STATES, interstateRate, calculate, parseCSV, parseNumber, round,productValue,productTotal } from './calculator.js';
 import { ICMS_REFERENCE,destinationInternalRate } from './icms-rates.js';
 
 const $ = id => document.getElementById(id);
@@ -55,7 +55,7 @@ function clearResult() {
   $('summary-caption').textContent = items.length ? 'Confira as alíquotas e calcule para ver o resultado.' : 'Tudo o que você precisa, em um só lugar.';
   $('calculate-button').firstChild.textContent = 'Calcular DIFAL ';
 }
-function baseTotal() { return round(items.reduce((sum, i) => sum + round(i.quantity * i.price + i.freight + i.other - i.discount), 0)); }
+function baseTotal() { return productTotal(items); }
 function renderItems() {
   updateInvoiceRates();clearResult(); $('items-body').replaceChildren();
   $('items-empty').hidden = !!items.length; $('items-container').hidden = !items.length;
@@ -65,7 +65,7 @@ function renderItems() {
     const row = document.createElement('tr');
     const description = document.createElement('td'), strong = document.createElement('strong'), small = document.createElement('small');
     strong.textContent = item.description; small.textContent = (item.ncm ? `NCM ${item.ncm}` : 'NCM não informado')+(item.interstateRate===undefined?'':` · ICMS da NF: ${item.interstateRate}%`); description.append(strong, small); row.append(description);
-    for (const value of [item.quantity.toLocaleString('pt-BR'), money(item.price), money(round(item.quantity * item.price + item.freight + item.other - item.discount))]) { const td = document.createElement('td'); td.textContent = value; row.append(td); }
+    for (const value of [item.quantity.toLocaleString('pt-BR'), money(item.price), money(productValue(item))]) { const td = document.createElement('td'); td.textContent = value; row.append(td); }
     const actions = document.createElement('td');
     for (const [text, title, action, cls] of [['✎','Editar item',() => openItem(index),''],['×','Remover item',() => { items.splice(index,1); renderItems(); },'remove']]) {
       const button = document.createElement('button'); button.textContent = text; button.title = title; button.setAttribute('aria-label', title + ' ' + item.description); button.className = 'row-button ' + cls; button.onclick = action; actions.append(button);
@@ -135,6 +135,8 @@ function parseXML(text) {
     return { description: value(product,'xProd') || 'Produto sem descrição', ncm: value(product,'NCM'), quantity, price, freight: number(product,'vFrete'), other: number(product,'vOutro') + number(product,'vSeg') + number(det,'vIPI'), discount: number(product,'vDesc'),...(origin!==destination&&printedRate&&[4,7,12].includes(itemRate)?{interstateRate:itemRate}:{}) };
   });
   const rates = nodes(nf, 'ICMSUFDest');
+  const total=nodes(nf,'ICMSTot')[0];
+  if(total&&value(total,'vProd')&&Math.abs(productTotal(items)-number(total,'vProd'))>.021)throw new Error('A soma dos itens do XML difere do valor total dos produtos. Confira o arquivo.');
   const uniform = tag => { const values = rates.map(rate => value(rate,tag)); return values.length === items.length && values.every(x => x !== '' && x === values[0]) ? Number(values[0]) : null; };
   return { items, origin, destination, internalRate:uniform('pICMSUFDest'), interstate:uniform('pICMSInter'), fcp:uniform('pFCPUFDest'), eligible:value(nf,'indFinal') === '1' && value(nf,'indIEDest') === '9', baseWarning, mixed: rates.length > 0 && uniform('pICMSUFDest') === null };
 }
@@ -175,7 +177,7 @@ $('calculate-button').onclick = () => {
     $('summary-grand-total').textContent=money(round(result.base+result.total));
     const applied=[...new Set(totals.rows.map(row=>row.appliedInterstate))];
     $('difal-percent').textContent = applied.length>1?'por item':`${config.origin === config.destination ? 0 : round(config.internalRate-(applied[0]??config.interstate))}%`; $('fcp-percent').textContent = `${config.fcp}%`;
-    $('summary-caption').textContent = `Calculado com ${items.length} ${items.length === 1 ? 'item' : 'itens'} · base única`;
+    $('summary-caption').textContent = `Calculado com ${items.length} ${items.length === 1 ? 'item' : 'itens'} · base: produtos`;
     $('export-button').disabled = false;
     history.unshift({ date: result.date, origin:config.origin,destination:config.destination,total:result.total,base:result.base,count:items.length }); history = history.slice(0,20); persistHistory();
     message(config.origin === config.destination ? 'Origem e destino são iguais: não há DIFAL interestadual nesta simulação.' : 'Simulação concluída. Confira o enquadramento fiscal antes de recolher. Você já pode exportar a memória de cálculo.');
@@ -196,11 +198,11 @@ $('export-button').onclick = () => {
   if (!result) return;
   // Spreadsheet formula injection prevention also applies to imported product names.
   const cell = value => { let text = String(value); if (/^[\s]*[=+@-]/.test(text)) text = "'" + text; return '"' + text.replaceAll('"','""') + '"'; };
-  const lines = [['Kush — Simulação DIFAL por base única'],['Data',new Date(result.date).toLocaleString('pt-BR')],['Documento',result.sourceName],['Origem',result.origin,'Destino',result.destination],['ICMS interno (%)',result.internalRate,'ICMS interestadual geral (%)',result.interstate,'FCP (%)',result.fcp],[],['Descrição','NCM','Quantidade','Valor unitário','Frete','Outras despesas / IPI','Desconto','ICMS interestadual aplicado (%)','Base','DIFAL','FCP','Total']];
+  const lines = [['Kush — Simulação DIFAL sobre o total dos produtos'],['Data',new Date(result.date).toLocaleString('pt-BR')],['Documento',result.sourceName],['Origem',result.origin,'Destino',result.destination],['ICMS interno (%)',result.internalRate,'ICMS interestadual geral (%)',result.interstate,'FCP (%)',result.fcp],['Critério da base','Total dos produtos; valores complementares e total da nota são informativos'],[],['Descrição','NCM','Quantidade','Valor unitário','Frete informado (fora da base)','Despesas / IPI informados (fora da base)','Desconto informado (fora da base)','ICMS interestadual aplicado (%)','Base (produtos)','DIFAL','FCP','Total']];
   if(result.internalRateSource==='table')lines.splice(5,0,['Fonte do ICMS interno',ICMS_REFERENCE.source,'Atualização informada',ICMS_REFERENCE.sourceUpdatedAt,'Consulta',ICMS_REFERENCE.retrievedAt]);
   const num = value => value.toLocaleString('pt-BR',{maximumFractionDigits:8,useGrouping:false});
   for (const row of result.rows) lines.push([row.description,row.ncm,...['quantity','price','freight','other','discount','appliedInterstate','base','difal','povertyFund','total'].map(key=>num(row[key]))]);
-  lines.push([],['Base total',num(result.base)],['DIFAL total',num(result.difal)],['FCP total',num(result.povertyFund)],['Total a recolher estimado',num(result.total)],['Valor total com DIFAL e FCP',num(round(result.base+result.total))],[],['Estimativa: confirme legislação, enquadramento, NCM e componentes da base antes de recolher. Não contempla ICMS-ST, benefícios fiscais ou base dupla.']);
+  lines.push([],['Base total dos produtos',num(result.base)],['DIFAL total',num(result.difal)],['FCP total',num(result.povertyFund)],['Total a recolher estimado',num(result.total)],['Valor total com DIFAL e FCP',num(round(result.base+result.total))],[],['Critério desta simulação: total dos produtos. A base legal de ICMS pode exigir outros componentes conforme a operação. Confirme enquadramento, NCM e legislação antes de recolher. Não contempla ICMS-ST, benefícios fiscais ou base dupla.']);
   download('\uFEFF' + lines.map(row => row.map(cell).join(';')).join('\r\n'),`difal-${result.origin}-${result.destination}-${result.date.slice(0,10)}.csv`,'text/csv;charset=utf-8');
 };
 $('new-button').onclick = () => {
@@ -235,7 +237,7 @@ function renderReaderRows(){
       for(const [key,labelText]of fields){const label=document.createElement('label');label.textContent=labelText;const input=document.createElement('input');input.dataset.field=key;input.dataset.row=index;input.value=row[key]??'';input.required=['description','quantity','price'].includes(key);input.maxLength=key==='description'?500:key==='ncm'?8:30;
         if(key!=='description'&&key!=='ncm')input.inputMode='decimal';if(key==='ncm')input.pattern='[0-9]{8}|';
         input.oninput=()=>{row[key]=input.value;syncReaderCSV();};label.append(input);group.append(label);}
-      if(fields[0][0]==='freight'){const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Frete, despesas e desconto';details.append(summary,group);card.append(details);}else card.append(group);
+      if(fields[0][0]==='freight'){const details=document.createElement('details');const summary=document.createElement('summary');summary.textContent='Valores complementares (fora da base por produtos)';details.append(summary,group);card.append(details);}else card.append(group);
     }
     $('reader-products').append(card);
   });
@@ -298,8 +300,8 @@ $('reader-import').onclick=()=>{
     for(const input of $('reader-products').querySelectorAll('input'))if(!input.reportValidity())return;
     const reviewed=reviewedReaderItems();
     calculate({items:reviewed,origin:'SP',destination:'RJ',internalRate:18,interstate:12,fcp:0});
-    const expected=pendingDocument.verification.declaredTotal;
-    if(expected!==null&&expected!==undefined&&Math.abs(calculate({items:reviewed,origin:'SP',destination:'RJ',internalRate:18,interstate:12,fcp:0}).base-expected)>.021)throw new Error('Os valores revisados não conferem com o total do documento. Confira as alterações antes de importar.');
+    const expected=pendingDocument.verification.declaredProducts;
+    if(expected!==null&&expected!==undefined&&Math.abs(productTotal(reviewed)-expected)>.021)throw new Error('Os valores revisados não conferem com o valor total dos produtos. Confira as alterações antes de importar.');
     if (reviewed.length>500) throw new Error('Limite de 500 itens por documento.');
     if (items.length && !window.confirm('Substituir os itens atuais pelos itens conferidos deste documento?')) return;
     items=reviewed;setInvoiceRates(pendingDocument); sourceName=pendingDocument.name+' (IA local conferida)';
@@ -323,12 +325,13 @@ function renderRecognitionSummary(parsed){
   add('Origem identificada',parsed.origin||'Não informada / ambígua');
   add('Destino identificado',parsed.destination||'Não informado / ambíguo');
   if(Number.isFinite(v.products))add('Total dos produtos',money(v.products));
-  if(v.delivery)add('Entrega / frete identificado',money(v.delivery));
+  if(Number.isFinite(v.declaredTotal))add('Total da nota / orçamento (informativo)',money(v.declaredTotal));
+  if(v.delivery)add('Entrega / frete (informativo)',money(v.delivery));
   const rates=[...new Set(parsed.items.map(item=>item.interstateRate).filter(Number.isFinite))];
   if(rates.length)add('ICMS informado na NF',rates.sort((a,b)=>a-b).map(rate=>rate+'%').join(' e ')+' por item');
   if(Number.isFinite(v.declaredProducts)&&v.declaredProducts!==v.products)add('Total de produtos declarado na nota',money(v.declaredProducts));
-  if(Number.isFinite(v.base))add('Total da base reconhecida',money(v.base));
-  add('Conferência',v.complete?(v.declaredTotal!==null?'Total confere com o documento':'Linhas conferidas; sem total geral declarado'):'Leitura incompleta — não importar');
+  if(Number.isFinite(v.base))add('Base do DIFAL · total dos produtos',money(v.base));
+  add('Conferência',v.complete?(v.declaredProducts!==null?'Produtos conferem com o total declarado':'Linhas conferidas; sem total de produtos declarado'):'Leitura incompleta — não importar');
 }
 function renderAutomaticProducts(){
   $('reader-auto-body').replaceChildren();

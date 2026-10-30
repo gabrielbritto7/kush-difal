@@ -13,7 +13,7 @@ const addressCue=/\b(?:endereco|cidade|municipio|cep|rua|avenida|av\.?|rodovia|b
 function stateFrom(value){const clean=normalize(value).trim();return stateNames[clean]|| (STATES.includes(clean.toUpperCase())?clean.toUpperCase():null);}
 
 function addressStates(lines){
-  const values=new Set();
+  const values=new Set(),hasAddress=lines.some(line=>addressCue.test(normalize(line)));
   for(let index=0;index<lines.length;index++){
     const line=lines[index],normal=normalize(line);
     for(const match of normal.matchAll(new RegExp(`\\b(?:uf|estado)(?:\\s+(?:do|da)\\s+(?:emitente|fornecedor|cliente|destinatario))?\\s*[:=\\-]\\s*(${stateValue})\\b`,'g')))values.add(stateFrom(match[1]));
@@ -24,6 +24,9 @@ function addressStates(lines){
     const city=normal.match(new RegExp(`\\b(?:cidade|municipio)\\s*[:=]\\s*[^\\n]*?\\s+(${statesPattern.toLowerCase()})\\s*(?:$|\\bcep\\b|\\d{5})`));
     if(city)values.add(city[1].toUpperCase());
     const previous=normalize(lines[index-1]||'');
+    // A printed issuer UF can share its baseline with the entry/exit labels in the DANFE column.
+    const standalone=line.match(/^([A-Z]{2})(?:\s*$|\s+[01]\s*[-–]\s*(?:entrada|sa[ií]da)\b)/i);
+    if(hasAddress&&standalone&&STATES.includes(standalone[1].toUpperCase()))values.add(standalone[1].toUpperCase());
     if(addressCue.test(normal)||/\buf\b/.test(previous)){
       for(const match of line.matchAll(new RegExp(`\\b(${statesPattern})\\b`,'g')))values.add(match[1]);
     }

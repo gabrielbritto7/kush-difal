@@ -63,14 +63,6 @@ export function readDocumentAmounts(text){
   };
 }
 function sum(items,selector){return round(items.reduce((total,item)=>total+selector(item),0));}
-function allocate(items,key,total){
-  if(total===null || !total || !items.length)return;
-  const bases=items.map(item=>round(item.quantity*item.price)),base=bases.reduce((a,b)=>a+b,0);if(base<=0)return;
-  const cents=Math.round(total*100);let used=0;
-  const shares=bases.map((value,index)=>{const raw=cents*value/base,n=Math.floor(raw);used+=n;return {index,cents:n,remainder:raw-n};});
-  for(const share of [...shares].sort((a,b)=>b.remainder-a.remainder).slice(0,cents-used))share.cents++;
-  for(const share of shares)items[share.index][key]=round(items[share.index][key]+share.cents/100);
-}
 export function recognizeDocument(tables,text,metadata={}){
   const kind=documentKind(text),route=extractDocumentRoute(text);
   if(kind==='service_invoice'){
@@ -83,16 +75,16 @@ export function recognizeDocument(tables,text,metadata={}){
     }
     return {items:[],...route,text,tables,documentType:kind,blocked:true,service:{description:index>=0?lines[index+1]?.trim()||'':'',amount},warnings:['Documento identificado como NFS-e de serviços (ISSQN). Esta calculadora trata DIFAL de ICMS sobre mercadorias: o valor desta nota não será importado como produto.'],verification:{complete:false,reason:'service_invoice'}};
   }
-  const items=[],warnings=[],rejections=[],lineCharges={freight:0,insurance:0,other:0,ipi:0,discount:0};let detectedRows=0,mappedTables=0;
+  const items=[],warnings=[],rejections=[],chargeFields=['freight','insurance','other','ipi','discount'];let detectedRows=0,mappedTables=0;
   for(const [tableIndex,table]of tables.entries()){
-    const rows=table.rows||[];let columns=null,start=0;
+    const rows=table.rows||[];let columns=null,start=0,rateHeader='';
     for(let first=0;first<Math.min(8,rows.length);first++){
       for(const depth of [1,2,3]){
         const headers=Array.from({length:Math.max(0,...rows.slice(first,first+depth).map(r=>r.length))},(_,column)=>[...new Set(rows.slice(first,first+depth).map(row=>row[column]||'').filter(Boolean))].join(' '));
         const fields=headers.map(fieldName);
         if(!fields.includes('description') || !fields.includes('quantity') || !fields.some(x=>x==='price'||x==='total'))continue;
         const map={};for(let index=0;index<fields.length;index++)if(fields[index] && fields[index]!=='ignore' && map[fields[index]]===undefined)map[fields[index]]=index;
-        columns=map;start=first+depth;break;
+        columns=map;rateHeader=headers[map.icmsRate]||'';start=first+depth;break;
       }
       if(columns)break;
     }
@@ -130,7 +122,7 @@ export function recognizeDocument(tables,text,metadata={}){
         const total=get('total')?valueOf(get('total')):null;
         let price=get('price')?valueOf(get('price')):total!==null?total/quantity:NaN;
         if(!Number.isFinite(price))throw new Error('Preço não reconhecido');
-        const charges=Object.fromEntries(Object.keys(lineCharges).map(key=>[key,get(key)?valueOf(get(key)):0]));
+        const charges=Object.fromEntries(chargeFields.map(key=>[key,get(key)?valueOf(get(key)):0]));
         const freight=charges.freight,other=charges.other+charges.insurance+charges.ipi,discount=charges.discount;
         if(total!==null){
           const adjustment=kind==='goods_invoice'?0:freight+other-discount;
@@ -146,12 +138,15 @@ export function recognizeDocument(tables,text,metadata={}){
         if(ncm&&!/^\d{8}$/.test(ncm)){ncm='';warnings.push('NCM ilegível foi deixado em branco; nenhuma classificação foi inventada.');}
         let interstateRate;
         if(kind==='goods_invoice'&&route.origin&&route.destination&&route.origin!==route.destination&&get('icmsRate')){
-          const rate=valueOf(get('icmsRate').replace('%','').trim());
+          const rawRate=get('icmsRate').replace(/%/g,'').trim();
+          const combined=/\baliq\w*\s+icms\s+ipi\b/.test(normalize(rateHeader)),parts=rawRate.split(/\s+/);
+          // A shared ICMS/IPI rate cell has an explicit left-to-right order, not two monetary amounts.
+          if(combined&&parts.length===2)valueOf(parts[1]);
+          const rate=valueOf(combined&&parts.length===2?parts[0]:rawRate);
           if([4,7,12].includes(rate))interstateRate=rate;
           else warnings.push('Há alíquota de ICMS no documento fora das regras interestaduais de 4%, 7% ou 12%. Confira o enquadramento do produto.');
         }
         items.push({description,ncm,quantity,price,freight,other,discount,...(interstateRate===undefined?{}:{interstateRate})});
-        for(const key of Object.keys(lineCharges))lineCharges[key]+=charges[key];
       }catch(error){rejections.push({table:tableIndex+1,row:start+offset+1,reason:error.message});}
     }
   }
@@ -159,23 +154,13 @@ export function recognizeDocument(tables,text,metadata={}){
   const amounts=readDocumentAmounts(text),products=sum(items,item=>round(item.quantity*item.price)),declaredProducts=metadata.declaredProducts??amounts.declaredProducts;
   const delivery=metadata.delivery??amounts.delivery,discount=metadata.discount??amounts.discount,declaredTotal=metadata.declaredTotal??amounts.declaredTotal;
   const productMatch=declaredProducts===null || Math.abs(products-declaredProducts)<=.021;
-  if(productMatch && !rejections.length){
-    const globals={freight:delivery,discount,insurance:metadata.insurance,other:metadata.other,ipi:metadata.ipi};
-    for(const [key,value]of Object.entries(globals)){
-      if(value===null||value===undefined)continue;
-      const difference=round(value-lineCharges[key]);
-      if(difference<-.021){rejections.push({reason:`O total de ${key} das linhas excede o declarado no documento.`});continue;}
-      if(difference>0){allocate(items,['freight','discount'].includes(key)?key:'other',difference);warnings.push(key==='freight'?'A taxa de entrega/frete foi identificada e rateada proporcionalmente entre os produtos.':key==='discount'?'O desconto global foi rateado proporcionalmente entre os produtos.':'Despesas, seguro ou IPI declarados na nota foram distribuídos proporcionalmente entre os produtos.');}
-    }
-  }
-  const base=sum(items,item=>round(item.quantity*item.price+item.freight+item.other-item.discount));
-  const totalMatch=declaredTotal===null || Math.abs(base-declaredTotal)<=.021;
+  const base=products;
   if(!productMatch)warnings.push('A soma dos produtos reconhecidos difere do total de produtos do documento. A leitura automática está incompleta; não use o resultado sem conferir as linhas faltantes.');
-  if(!totalMatch)warnings.push('O total calculado difere do total do documento. Há valores ou itens não reconhecidos; a leitura não foi considerada completa.');
   if(rejections.length)warnings.push(`${rejections.length} linha(s) foram rejeitadas por valores ilegíveis ou divergentes.`);
   if(!items.length)warnings.push('A IA não reconheceu produtos com quantidade e preço confiáveis neste documento. Não serão inventados itens ou valores.');
   if(items.some(item=>!item.ncm))warnings.push('O documento não informa NCM em todos os itens. Nenhum NCM ou alíquota foi deduzido pela IA.');
   warnings.push(...route.routeWarnings);
-  if(metadata.conflicts?.length)warnings.push('Foram encontrados totais divergentes no documento. A importação foi bloqueada.');
-  return {items,text,tables,documentType:kind,...route,warnings:[...new Set(warnings)],verification:{complete:items.length>0 && productMatch && totalMatch && !rejections.length&&!metadata.conflicts?.length,detectedRows,recognizedRows:items.length,rejections,mappedTables,products,declaredProducts,delivery:delivery||0,discount:discount||0,base,declaredTotal}};
+  const conflicts=(metadata.conflicts||[]).filter(key=>!['declaredTotal','delivery','discount','insurance','other','ipi'].includes(key));
+  if(conflicts.length)warnings.push('Foram encontrados totais de produtos divergentes no documento. A importação foi bloqueada.');
+  return {items,text,tables,documentType:kind,...route,warnings:[...new Set(warnings)],verification:{complete:items.length>0 && productMatch && !rejections.length&&!conflicts.length,detectedRows,recognizedRows:items.length,rejections,mappedTables,products,declaredProducts,delivery:delivery||0,discount:discount||0,base,baseCriterion:'products',declaredTotal}};
 }

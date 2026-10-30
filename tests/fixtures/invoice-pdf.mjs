@@ -9,7 +9,7 @@ function pdf(pages){
   const xref=Buffer.byteLength(value);value+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`+offsets.map(n=>String(n).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return Buffer.from(value);
 }
-export function invoicePDF({combinedUnit=false,inconsistent=false}={}){
+export function invoicePDF({combinedUnit=false,inconsistent=false,noteExtra=0}={}){
   const columns=combinedUnit?[20,60,235,280,305,335,395,450,500,530,575]:[20,60,235,280,305,335,355,395,450,500,530,575];
   const headers=combinedUnit?['CODIGO','DESCRICAO DO PRODUTO / SERVICO','NCM/SH','CST','CFOP','QTD / UN','VLR UNIT','VLR TOTAL','VLR DESC','ALIQ ICMS']:['CODIGO','DESCRICAO DO PRODUTO / SERVICO','NCM/SH','CST','CFOP','UN','QUANT','VALOR UNIT','VALOR TOTAL','VALOR DESC','ALIQ ICMS'];
   const pages=[];
@@ -22,7 +22,7 @@ export function invoicePDF({combinedUnit=false,inconsistent=false}={}){
       text('DESTINATARIO / REMETENTE',20,755);text('Cliente Exemplo - Curitiba - PR',20,740);
       text('CALCULO DO IMPOSTO',20,710);
       text('V. TOTAL PRODUTOS',20,685);text('VALOR DO FRETE',220,685);text('V. TOTAL DA NOTA',400,685);
-      text(inconsistent?'300,00':'200,00',30,665);text('20,00',240,665);text(inconsistent?'320,00':'220,00',470,665);
+      text(inconsistent?'300,00':'200,00',30,665);text('20,00',240,665);text(((inconsistent?320:220)+noteExtra).toFixed(2).replace('.',','),470,665);
     }
     text('DADOS DOS PRODUTOS / SERVICOS',20,590);
     const top=580,bottom=450;

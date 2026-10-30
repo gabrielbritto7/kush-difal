@@ -39,3 +39,8 @@ test('unlabelled DANFE issuer addresses exclude the recipient receipt stub',()=>
   const route=extractDocumentRoute('RECEBEMOS OS PRODUTOS PARA Cliente Exemplo - Salvador - BA\nEmpresa Exemplo DANFE\nRua Exemplo, 100\nCampinas - SP\nDESTINATÁRIO / REMETENTE\nCidade: Salvador - BA\nCÁLCULO DO IMPOSTO');
   assert.equal(route.origin,'SP');assert.equal(route.destination,'BA');
 });
+test('a literal issuer UF beside the DANFE entry label is read only inside an address block',()=>{
+  const route=extractDocumentRoute('Empresa Exemplo DANFE\nRua Exemplo, 100\nBairro Centro Nota Fiscal Eletronica\nCidade Exemplo CHAVE DE ACESSO\nSP 0 - Entrada 1 00000000000000000000000000000000000000000000\nDESTINATARIO / REMETENTE\nCidade: Salvador - BA\nCALCULO DO IMPOSTO');
+  assert.equal(route.origin,'SP');assert.equal(route.destination,'BA');
+  assert.equal(extractDocumentRoute('DANFE\nSP 0 - Entrada\nDESTINATARIO / REMETENTE\nCidade: Salvador - BA').origin,null);
+});

@@ -7,6 +7,8 @@ export function interstateRate(origin, destination, imported = false) {
   return SOUTH_SOUTHEAST.includes(origin) && !SOUTH_SOUTHEAST.includes(destination) ? 7 : 12;
 }
 export const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
+export const productValue = item => round(item.quantity * item.price);
+export const productTotal = items => round(items.reduce((total,item)=>total+productValue(item),0));
 export function calculate({ items, origin, destination, internalRate, interstate, fcp, eligible = true,useItemRates=true }) {
   for (const [name, value] of Object.entries({internalRate, interstate, fcp})) {
     if (!Number.isFinite(value) || value < 0 || value >= 100) throw new Error('Alíquota inválida: ' + name);
@@ -19,8 +21,7 @@ export function calculate({ items, origin, destination, internalRate, interstate
       if (!Number.isFinite(item[key]) || item[key] < 0) throw new Error('Confira os valores do item ' + item.description);
     }
     if (item.quantity === 0) throw new Error('A quantidade deve ser maior que zero.');
-    const base = round(item.quantity * item.price + item.freight + item.other - item.discount);
-    if (base < 0) throw new Error('O desconto não pode superar o valor do item.');
+    const base = productValue(item);
     const applies = eligible && origin !== destination;
     const difal = applies ? round(base * (internalRate - itemRate) / 100) : 0;
     const povertyFund = applies ? round(base * fcp / 100) : 0;
@@ -30,7 +31,7 @@ export function calculate({ items, origin, destination, internalRate, interstate
     result.rows.push(row);
     for (const key of ['base','difal','povertyFund','total']) result[key] = round(result[key] + row[key]);
     return result;
-  }, { rows: [], base: 0, difal: 0, povertyFund: 0, total: 0 });
+  }, { rows: [], baseCriterion:'products',base: 0, difal: 0, povertyFund: 0, total: 0 });
 }
 
 export function parseNumber(value) {

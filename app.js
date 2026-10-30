@@ -53,7 +53,6 @@ function clearResult() {
   $('summary-grand-total').textContent='—';
   $('difal-percent').textContent = '—'; $('fcp-percent').textContent = `${$('fcp-rate').value || 0}%`;
   $('summary-caption').textContent = items.length ? 'Confira as alíquotas e calcule para ver o resultado.' : 'Tudo o que você precisa, em um só lugar.';
-  $('step-review').classList.toggle('current', items.length > 0); $('step-result').classList.remove('current');
   $('calculate-button').firstChild.textContent = 'Calcular DIFAL ';
 }
 function baseTotal() { return round(items.reduce((sum, i) => sum + round(i.quantity * i.price + i.freight + i.other - i.discount), 0)); }
@@ -177,7 +176,7 @@ $('calculate-button').onclick = () => {
     const applied=[...new Set(totals.rows.map(row=>row.appliedInterstate))];
     $('difal-percent').textContent = applied.length>1?'por item':`${config.origin === config.destination ? 0 : round(config.internalRate-(applied[0]??config.interstate))}%`; $('fcp-percent').textContent = `${config.fcp}%`;
     $('summary-caption').textContent = `Calculado com ${items.length} ${items.length === 1 ? 'item' : 'itens'} · base única`;
-    $('export-button').disabled = false; $('step-result').classList.add('current');
+    $('export-button').disabled = false;
     history.unshift({ date: result.date, origin:config.origin,destination:config.destination,total:result.total,base:result.base,count:items.length }); history = history.slice(0,20); persistHistory();
     message(config.origin === config.destination ? 'Origem e destino são iguais: não há DIFAL interestadual nesta simulação.' : 'Simulação concluída. Confira o enquadramento fiscal antes de recolher. Você já pode exportar a memória de cálculo.');
   } catch (error) { clearResult(); message(error.message,true); }
